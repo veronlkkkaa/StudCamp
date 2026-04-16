@@ -37,7 +37,7 @@ fun StartScreen(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
-            text = "Рядом",
+            text = "StudcampApp",
             fontSize = 40.sp,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.primary

@@ -4,7 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import com.example.studcampapp.ui.screens.StartScreen
+import com.example.studcampapp.ui.navigation.NavGraph
 import com.example.studcampapp.ui.theme.AppTheme
 
 class MainActivity : ComponentActivity() {
@@ -13,10 +13,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             AppTheme {
-                StartScreen(
-                    onGuestLogin = { /* потом */ },
-                    onAuthLogin = { /* потом */ }
-                )
+                NavGraph()
             }
         }
     }
