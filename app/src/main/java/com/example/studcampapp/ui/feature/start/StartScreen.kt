@@ -1,4 +1,4 @@
-package com.example.studcampapp.ui.screens
+package com.example.studcampapp.ui.feature.start
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background

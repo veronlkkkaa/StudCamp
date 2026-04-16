@@ -1,4 +1,4 @@
-package com.example.studcampapp.ui.screens
+package com.example.studcampapp.ui.feature.auth
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -58,9 +58,7 @@ fun AuthScreen(
             onValueChange = { phone = it },
             label = { Text("Номер телефона") },
             placeholder = { Text("+7 999 999 99 99") },
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Phone
-            ),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
             modifier = Modifier.fillMaxWidth()
         )
 
@@ -71,9 +69,7 @@ fun AuthScreen(
             onValueChange = { password = it },
             label = { Text("Пароль") },
             visualTransformation = PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Password
-            ),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
             modifier = Modifier.fillMaxWidth()
         )
 

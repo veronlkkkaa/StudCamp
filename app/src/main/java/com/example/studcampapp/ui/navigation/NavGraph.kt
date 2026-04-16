@@ -4,9 +4,9 @@ import androidx.compose.runtime.Composable
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.example.studcampapp.ui.screens.AuthScreen
-import com.example.studcampapp.ui.screens.ChatScreen
-import com.example.studcampapp.ui.screens.StartScreen
+import com.example.studcampapp.ui.feature.auth.AuthScreen
+import com.example.studcampapp.ui.feature.chat.ChatScreen
+import com.example.studcampapp.ui.feature.start.StartScreen
 
 @Composable
 fun NavGraph() {
