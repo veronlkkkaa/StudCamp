@@ -4,14 +4,20 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import com.example.studcampapp.model.UserStore
 import com.example.studcampapp.ui.theme.*
 
 data class RoomPreview(val name: String, val lastMessage: String, val members: Int)
@@ -19,7 +25,8 @@ data class RoomPreview(val name: String, val lastMessage: String, val members: I
 @Composable
 fun ChatListScreen(
     onRoomClick: () -> Unit,
-    onCreateRoom: () -> Unit
+    onCreateRoom: () -> Unit,
+    onProfileClick: () -> Unit = {}
 ) {
     val fakeRooms = listOf(
         RoomPreview("Общий чат", "Привет всем!", 12),
@@ -41,6 +48,46 @@ fun ChatListScreen(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
+            val user = UserStore.currentUser
+            Surface(
+                onClick = onProfileClick,
+                color = androidx.compose.ui.graphics.Color.Transparent,
+                shape = CircleShape
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (user?.avatarUri != null) {
+                        AsyncImage(
+                            model = user.avatarUri,
+                            contentDescription = "Аватар",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    Brush.radialGradient(colors = listOf(PurpleLight, PurpleVibrant))
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = user?.firstName?.firstOrNull()?.toString() ?: "?",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = InterFontFamily,
+                                color = TextPrimary
+                            )
+                        }
+                    }
+                }
+            }
+
             Text(
                 text = "Чаты",
                 fontSize = 22.sp,

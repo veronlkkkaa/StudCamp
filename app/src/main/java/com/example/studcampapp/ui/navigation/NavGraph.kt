@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.example.studcampapp.navigation.Route
 import com.example.studcampapp.ui.feature.auth.AuthScreen
 import com.example.studcampapp.ui.feature.auth.RegisterScreen
 import com.example.studcampapp.ui.feature.chat.ChatListScreen
@@ -21,75 +22,86 @@ fun NavGraph() {
 
     NavHost(
         navController = navController,
-        startDestination = "start"
+        startDestination = Route.Start
     ) {
-        composable("start") {
+        composable<Route.Start> {
             StartScreen(
-                onGuestLogin = { navController.navigate("chat_list") },
-                onAuthLogin = { navController.navigate("auth") },
-                onRegister = { navController.navigate("register") }
+                onGuestLogin = { navController.navigate(Route.ChatList) },
+                onAuthLogin  = { navController.navigate(Route.Auth) },
+                onRegister   = { navController.navigate(Route.Register) }
             )
         }
-        composable("auth") {
+
+        composable<Route.Auth> {
             AuthScreen(
-                onLoginSuccess = { navController.navigate("chat_list") },
-                onBack = { navController.popBackStack() }
-            )
-        }
-        composable("register") {
-            RegisterScreen(
-                onRegisterSuccess = {
-                    navController.navigate("chat_list") {
-                        popUpTo("start") { inclusive = false }
+                onLoginSuccess = {
+                    navController.navigate(Route.ChatList) {
+                        popUpTo(Route.Start) { inclusive = false }
                     }
                 },
                 onBack = { navController.popBackStack() }
             )
         }
-        composable("chat_list") {
-            ChatListScreen(
-                onRoomClick = { navController.navigate("chat") },
-                onCreateRoom = { navController.navigate("room_options") },
-                onProfileClick = { navController.navigate("profile") }
+
+        composable<Route.Register> {
+            RegisterScreen(
+                onRegisterSuccess = {
+                    navController.navigate(Route.ChatList) {
+                        popUpTo(Route.Start) { inclusive = false }
+                    }
+                },
+                onBack = { navController.popBackStack() }
             )
         }
-        composable("profile") {
+
+        composable<Route.ChatList> {
+            ChatListScreen(
+                onRoomClick    = { navController.navigate(Route.Chat) },
+                onCreateRoom   = { navController.navigate(Route.RoomOptions) },
+                onProfileClick = { navController.navigate(Route.Profile) }
+            )
+        }
+
+        composable<Route.Chat> {
+            ChatScreen(onLeave = { navController.popBackStack() })
+        }
+
+        composable<Route.Profile> {
             ProfileScreen(
-                onBack = { navController.popBackStack() },
-                onLogout = {
-                    navController.navigate("start") {
-                        popUpTo("start") { inclusive = false }
+                onBack        = { navController.popBackStack() },
+                onLogout      = {
+                    navController.navigate(Route.Start) {
+                        popUpTo(Route.Start) { inclusive = false }
                         launchSingleTop = true
                     }
                 },
-                onEditProfile = { navController.navigate("edit_profile") }
+                onEditProfile = { navController.navigate(Route.EditProfile) }
             )
         }
-        composable("edit_profile") {
+
+        composable<Route.EditProfile> {
             EditProfileScreen(onBack = { navController.popBackStack() })
         }
-        composable("room_options") {
+
+        composable<Route.RoomOptions> {
             RoomOptionsScreen(
-                onBack = { navController.popBackStack() },
-                onCreateRoom = { navController.navigate("create_room") },
-                onJoinRoom = { navController.navigate("join_room") }
+                onBack       = { navController.popBackStack() },
+                onCreateRoom = { navController.navigate(Route.CreateRoom) },
+                onJoinRoom   = { navController.navigate(Route.JoinRoom) }
             )
         }
-        composable("create_room") {
+
+        composable<Route.CreateRoom> {
             CreateRoomScreen(
-                onBack = { navController.popBackStack() },
-                onRoomCreated = { navController.navigate("chat") }
+                onBack        = { navController.popBackStack() },
+                onRoomCreated = { navController.navigate(Route.Chat) }
             )
         }
-        composable("join_room") {
+
+        composable<Route.JoinRoom> {
             JoinRoomScreen(
-                onBack = { navController.popBackStack() },
-                onJoined = { navController.navigate("chat") }
-            )
-        }
-        composable("chat") {
-            ChatScreen(
-                onLeave = { navController.popBackStack() }
+                onBack   = { navController.popBackStack() },
+                onJoined = { navController.navigate(Route.Chat) }
             )
         }
     }

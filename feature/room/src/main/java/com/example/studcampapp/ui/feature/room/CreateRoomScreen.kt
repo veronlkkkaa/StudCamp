@@ -58,11 +58,7 @@ fun CreateRoomScreen(
                 value = roomName,
                 onValueChange = { roomName = it },
                 label = {
-                    Text(
-                        "Название комнаты",
-                        fontFamily = InterFontFamily,
-                        color = TextSecondary
-                    )
+                    Text("Название комнаты", fontFamily = InterFontFamily, color = TextSecondary)
                 },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
