@@ -7,6 +7,7 @@ import androidx.navigation.compose.rememberNavController
 import com.example.studcampapp.ui.feature.auth.AuthScreen
 import com.example.studcampapp.ui.feature.chat.ChatListScreen
 import com.example.studcampapp.ui.feature.chat.ChatScreen
+import com.example.studcampapp.ui.feature.profile.ProfileScreen
 import com.example.studcampapp.ui.feature.room.CreateRoomScreen
 import com.example.studcampapp.ui.feature.room.JoinRoomScreen
 import com.example.studcampapp.ui.feature.room.RoomOptionsScreen
@@ -35,7 +36,19 @@ fun NavGraph() {
         composable("chat_list") {
             ChatListScreen(
                 onRoomClick = { navController.navigate("chat") },
-                onCreateRoom = { navController.navigate("room_options") }
+                onCreateRoom = { navController.navigate("room_options") },
+                onProfileClick = { navController.navigate("profile") }
+            )
+        }
+        composable("profile") {
+            ProfileScreen(
+                onBack = { navController.popBackStack() },
+                onLogout = {
+                    navController.navigate("start") {
+                        popUpTo("start") { inclusive = false }
+                        launchSingleTop = true
+                    }
+                }
             )
         }
         composable("room_options") {

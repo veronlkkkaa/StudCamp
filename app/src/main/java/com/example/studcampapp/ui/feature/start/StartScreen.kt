@@ -13,8 +13,12 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.studcampapp.ui.theme.*
@@ -23,7 +27,8 @@ import com.example.studcampapp.ui.theme.InterFontFamily
 @Composable
 fun StartScreen(
     onGuestLogin: () -> Unit,
-    onAuthLogin: () -> Unit
+    onAuthLogin: () -> Unit,
+    onRegister: () -> Unit = {}
 ) {
     // Звёзды как доли экрана (0f..1f)
     val stars = listOf(
@@ -175,6 +180,22 @@ fun StartScreen(
                 )
             }
 
+            Spacer(modifier = Modifier.height(20.dp))
+
+            TextButton(onClick = onRegister) {
+                Text(
+                    text = buildAnnotatedString {
+                        append("Нет аккаунта? ")
+                        withStyle(SpanStyle(color = Purple, fontWeight = FontWeight.SemiBold)) {
+                            append("Зарегистрироваться")
+                        }
+                    },
+                    fontSize = 13.sp,
+                    fontFamily = InterFontFamily,
+                    color = TextSecondary,
+                    textAlign = TextAlign.Center
+                )
+            }
         }
     }
 }
