@@ -1,5 +1,7 @@
 package com.example.studcampapp.backend.session
 
+import com.example.studcampapp.model.ChatMessage
+import com.example.studcampapp.model.FileInfo
 import com.example.studcampapp.model.RoomState
 import com.example.studcampapp.model.User
 import com.example.studcampapp.model.dto.JoinRequest
@@ -12,6 +14,8 @@ class SessionStore {
     private val mutex = Mutex()
     private val usersById = LinkedHashMap<String, User>()
     private val sessionsById = LinkedHashMap<String, String>()
+    private val messages = ArrayList<ChatMessage>()
+    private var nextMessageId = 1
 
     suspend fun join(request: JoinRequest): JoinResponse = mutex.withLock {
         val user = User(
@@ -32,15 +36,53 @@ class SessionStore {
         JoinResponse(
             sessionId = sessionId,
             user = user,
-            state = RoomState(
-                users = usersById.values.toList(),
-                messages = emptyList()
-            )
+            state = roomStateUnsafe()
         )
     }
 
     suspend fun getUserIdBySessionId(sessionId: String): String? = mutex.withLock {
         sessionsById[sessionId]
+    }
+
+    suspend fun getUserBySessionId(sessionId: String): User? = mutex.withLock {
+        val userId = sessionsById[sessionId] ?: return@withLock null
+        usersById[userId]
+    }
+
+    suspend fun getRoomState(): RoomState = mutex.withLock {
+        roomStateUnsafe()
+    }
+
+    suspend fun addMessage(sessionId: String, text: String, fileInfo: FileInfo? = null): ChatMessage? = mutex.withLock {
+        val userId = sessionsById[sessionId] ?: return@withLock null
+        val user = usersById[userId] ?: return@withLock null
+
+        val message = ChatMessage(
+            id = nextMessageId++,
+            user = user,
+            text = text,
+            timeEpochMillis = System.currentTimeMillis(),
+            fileInfo = fileInfo
+        )
+        messages.add(message)
+        message
+    }
+
+    suspend fun leave(sessionId: String): User? = mutex.withLock {
+        val userId = sessionsById.remove(sessionId) ?: return@withLock null
+        val hasOtherSessions = sessionsById.values.any { it == userId }
+        if (hasOtherSessions) {
+            return@withLock null
+        }
+
+        usersById.remove(userId)
+    }
+
+    private fun roomStateUnsafe(): RoomState {
+        return RoomState(
+            users = usersById.values.toList(),
+            messages = messages.toList()
+        )
     }
 }
 
