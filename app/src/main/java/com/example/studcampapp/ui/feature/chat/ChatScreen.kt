@@ -1,5 +1,8 @@
 package com.example.studcampapp.ui.feature.chat
 
+import android.annotation.SuppressLint
+import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -36,16 +39,19 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.studcampapp.model.ChatMessage
+import com.example.studcampapp.model.User
 import java.time.LocalDateTime
 
+@SuppressLint("MutableCollectionMutableState")
+@RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun ChatScreen(
     onLeave: () -> Unit
 ) {
     val fakeMessages = listOf(
-        ChatMessage(1, "Гость 1", "Привет всем!", LocalDateTime.now()),
-        ChatMessage(2, "Гость 2", "Привет!", LocalDateTime.now()),
-        ChatMessage(3, "Гость 1", "Скидываю файл", LocalDateTime.now())
+        ChatMessage(1, User("id1", "Гость 1"), "Привет всем!", LocalDateTime.now()),
+        ChatMessage(2, User("id2", "Гость 2"), "Привет!", LocalDateTime.now()),
+        ChatMessage(3, User("id3", "Гость 3"), "Скидываю файл", LocalDateTime.now())
     )
 
     var inputText by remember { mutableStateOf("") }
@@ -55,9 +61,10 @@ fun ChatScreen(
         if (inputText.isNotEmpty()) {
             messages.value = (messages.value + ChatMessage(
                 id = messages.value.size + 1,
-                author = "Я",
+                user = User("id4","Я"),
                 text = inputText,
-                time = LocalDateTime.now()
+                time = LocalDateTime.now(),
+                fileInfo = null
             )).toMutableList()
             inputText = ""
         }
@@ -143,7 +150,7 @@ fun MessageBubble(message: ChatMessage) {
             .padding(12.dp)
     ) {
         Text(
-            text = message.author,
+            text = message.user.login,
             fontSize = 12.sp,
             color = MaterialTheme.colorScheme.primary,
             fontWeight = FontWeight.Bold
