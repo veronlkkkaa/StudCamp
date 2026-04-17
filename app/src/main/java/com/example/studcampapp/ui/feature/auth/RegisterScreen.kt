@@ -28,10 +28,12 @@ private fun isPasswordValid(password: String) =
     password.any { it.isLetter() } && password.any { it.isDigit() }
 
 @Composable
-fun AuthScreen(
-    onLoginSuccess: () -> Unit,
+fun RegisterScreen(
+    onRegisterSuccess: () -> Unit,
     onBack: () -> Unit
 ) {
+    var firstName by remember { mutableStateOf("") }
+    var lastName by remember { mutableStateOf("") }
     var username by remember { mutableStateOf("") }
     var phone by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -41,27 +43,29 @@ fun AuthScreen(
     AnimatedContent(
         targetState = showWelcome,
         transitionSpec = { fadeIn() togetherWith fadeOut() },
-        label = "auth_transition"
+        label = "register_transition"
     ) { isWelcome ->
         if (isWelcome) {
-            WelcomeScreen(username = username, onFinished = onLoginSuccess)
+            RegisterWelcomeScreen(username = username, onFinished = onRegisterSuccess)
         } else {
-            FormScreen(
+            RegisterFormScreen(
+                firstName = firstName, onFirstNameChange = { firstName = it },
+                lastName = lastName, onLastNameChange = { lastName = it },
                 username = username, onUsernameChange = { username = it },
                 phone = phone, onPhoneChange = { phone = it },
                 password = password, onPasswordChange = { password = it; passwordError = null },
                 passwordError = passwordError,
-                onLogin = {
-                    if (username.isBlank()) return@FormScreen
+                onRegister = {
+                    if (firstName.isBlank() || lastName.isBlank() || username.isBlank()) return@RegisterFormScreen
                     if (!isPasswordValid(password)) {
                         passwordError = "Пароль должен содержать буквы и цифры"
-                        return@FormScreen
+                        return@RegisterFormScreen
                     }
                     UserStore.login(
                         User(
                             id = UUID.randomUUID().toString(),
-                            firstName = "",
-                            lastName = "",
+                            firstName = firstName.trim(),
+                            lastName = lastName.trim(),
                             username = username.trim().removePrefix("@"),
                             phone = phone.trim()
                         )
@@ -75,7 +79,7 @@ fun AuthScreen(
 }
 
 @Composable
-private fun WelcomeScreen(username: String, onFinished: () -> Unit) {
+private fun RegisterWelcomeScreen(username: String, onFinished: () -> Unit) {
     LaunchedEffect(Unit) {
         delay(2200)
         onFinished()
@@ -84,14 +88,12 @@ private fun WelcomeScreen(username: String, onFinished: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                Brush.verticalGradient(colors = listOf(DarkBackground, DarkSurface))
-            ),
+            .background(Brush.verticalGradient(colors = listOf(DarkBackground, DarkSurface))),
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
-                text = "Добро пожаловать,",
+                text = "Аккаунт создан,",
                 fontSize = 22.sp,
                 fontFamily = InterFontFamily,
                 fontWeight = FontWeight.Normal,
@@ -106,22 +108,20 @@ private fun WelcomeScreen(username: String, onFinished: () -> Unit) {
                 color = TextPrimary
             )
             Spacer(modifier = Modifier.height(24.dp))
-            CircularProgressIndicator(
-                color = Wisteria,
-                strokeWidth = 2.dp,
-                modifier = Modifier.size(28.dp)
-            )
+            CircularProgressIndicator(color = Wisteria, strokeWidth = 2.dp, modifier = Modifier.size(28.dp))
         }
     }
 }
 
 @Composable
-private fun FormScreen(
+private fun RegisterFormScreen(
+    firstName: String, onFirstNameChange: (String) -> Unit,
+    lastName: String, onLastNameChange: (String) -> Unit,
     username: String, onUsernameChange: (String) -> Unit,
     phone: String, onPhoneChange: (String) -> Unit,
     password: String, onPasswordChange: (String) -> Unit,
     passwordError: String?,
-    onLogin: () -> Unit,
+    onRegister: () -> Unit,
     onBack: () -> Unit
 ) {
     val fieldColors = OutlinedTextFieldDefaults.colors(
@@ -146,7 +146,7 @@ private fun FormScreen(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
-            text = "Вход",
+            text = "Регистрация",
             fontSize = 32.sp,
             fontWeight = FontWeight.Bold,
             fontFamily = InterFontFamily,
@@ -156,7 +156,7 @@ private fun FormScreen(
         Spacer(modifier = Modifier.height(8.dp))
 
         Text(
-            text = "Заполните данные для входа в аккаунт",
+            text = "Создайте новый аккаунт",
             fontSize = 13.sp,
             fontFamily = InterFontFamily,
             color = TextSecondary
@@ -164,11 +164,33 @@ private fun FormScreen(
 
         Spacer(modifier = Modifier.height(28.dp))
 
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            OutlinedTextField(
+                value = firstName,
+                onValueChange = onFirstNameChange,
+                label = { Text("Имя", fontFamily = InterFontFamily) },
+                modifier = Modifier.weight(1f),
+                shape = fieldShape,
+                colors = fieldColors,
+                singleLine = true
+            )
+            OutlinedTextField(
+                value = lastName,
+                onValueChange = onLastNameChange,
+                label = { Text("Фамилия", fontFamily = InterFontFamily) },
+                modifier = Modifier.weight(1f),
+                shape = fieldShape,
+                colors = fieldColors,
+                singleLine = true
+            )
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
         OutlinedTextField(
             value = username,
             onValueChange = { onUsernameChange(it.removePrefix("@")) },
             label = { Text("Никнейм", fontFamily = InterFontFamily) },
-
             modifier = Modifier.fillMaxWidth(),
             shape = fieldShape,
             colors = fieldColors,
@@ -216,10 +238,8 @@ private fun FormScreen(
         Spacer(modifier = Modifier.height(28.dp))
 
         Button(
-            onClick = onLogin,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(56.dp),
+            onClick = onRegister,
+            modifier = Modifier.fillMaxWidth().height(56.dp),
             colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
             contentPadding = PaddingValues(0.dp),
             shape = RoundedCornerShape(20.dp),
@@ -235,7 +255,7 @@ private fun FormScreen(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    "Войти",
+                    "Зарегистрироваться",
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
                     fontFamily = InterFontFamily,

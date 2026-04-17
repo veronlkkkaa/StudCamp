@@ -15,6 +15,10 @@ object UserStore {
         currentUser = currentUser?.copy(avatarUri = uri)
     }
 
+    fun updateProfile(username: String, phone: String) {
+        currentUser = currentUser?.copy(username = username, phone = phone)
+    }
+
     fun logout() {
         currentUser = null
     }

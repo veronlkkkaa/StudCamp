@@ -34,7 +34,7 @@ import com.example.studcampapp.model.UserStore
 import com.example.studcampapp.ui.theme.*
 
 @Composable
-fun ProfileScreen(onBack: () -> Unit, onLogout: () -> Unit = onBack) {
+fun ProfileScreen(onBack: () -> Unit, onLogout: () -> Unit = onBack, onEditProfile: () -> Unit = {}) {
     val user = UserStore.currentUser
 
     val avatarPicker = rememberLauncherForActivityResult(
@@ -244,7 +244,7 @@ fun ProfileScreen(onBack: () -> Unit, onLogout: () -> Unit = onBack) {
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column {
-                        SettingsItem(icon = Icons.Default.Person, title = "Редактировать профиль", onClick = {})
+                        SettingsItem(icon = Icons.Default.Person, title = "Редактировать профиль", onClick = onEditProfile)
                         HorizontalDivider(color = Purple.copy(alpha = 0.12f), modifier = Modifier.padding(horizontal = 16.dp))
                         SettingsItem(icon = Icons.Default.Notifications, title = "Уведомления", onClick = {})
                         HorizontalDivider(color = Purple.copy(alpha = 0.12f), modifier = Modifier.padding(horizontal = 16.dp))
