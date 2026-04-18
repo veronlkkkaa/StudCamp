@@ -6,6 +6,7 @@ import com.example.studcampapp.model.RoomState
 import com.example.studcampapp.model.User
 import com.example.studcampapp.model.dto.JoinRequest
 import com.example.studcampapp.model.dto.JoinResponse
+import java.time.LocalDateTime
 import java.util.UUID
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -65,7 +66,7 @@ class SessionStore {
             id = nextMessageId++,
             user = user,
             text = text,
-            timeEpochMillis = System.currentTimeMillis(),
+            time = LocalDateTime.now(),
             fileInfo = fileInfo
         )
         messages.addLast(message)

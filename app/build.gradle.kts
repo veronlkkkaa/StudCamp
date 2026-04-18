@@ -49,6 +49,7 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.navigation.compose)
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
+    implementation(project(":core:model"))
     implementation(project(":core:ui"))
     implementation(project(":core:navigation"))
     implementation(project(":feature:auth"))
