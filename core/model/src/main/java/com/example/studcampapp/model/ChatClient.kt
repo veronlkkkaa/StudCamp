@@ -61,8 +61,9 @@ object ChatClient {
     private var tempIdCounter = 0
 
     val baseUrl: String get() = "http://$serverIp:$serverPort"
+    fun getAuthHeader(): String? = sessionId?.let { "Session $it" }
 
-    private val wsJson = Json {
+    private val wsJson =  Json {
         ignoreUnknownKeys = true
         encodeDefaults = true
         explicitNulls = false

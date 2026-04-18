@@ -4,6 +4,8 @@ import android.Manifest
 import android.app.DownloadManager
 import android.content.Context
 import android.content.pm.PackageManager
+import android.media.MediaPlayer
+import android.media.MediaRecorder
 import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -17,6 +19,9 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -47,6 +52,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.example.studcampapp.model.*
 import com.example.studcampapp.model.User
 import com.example.studcampapp.ui.theme.*
@@ -55,6 +61,7 @@ import kotlinx.coroutines.launch
 import java.time.LocalDateTime
 
 private fun getFileNameFromUri(context: Context, uri: android.net.Uri): String {
+    if (uri.scheme == "file") return uri.lastPathSegment ?: "Файл"
     var name = "Файл"
     context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
         val col = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
@@ -68,12 +75,13 @@ private fun attachmentTypeFromName(fileName: String): AttachmentType {
     return when (ext) {
         in listOf("jpg", "jpeg", "png", "gif", "webp", "bmp", "heic", "heif") -> AttachmentType.Image
         in listOf("mp4", "avi", "mov", "mkv", "webm", "3gp") -> AttachmentType.Video
+        in listOf("mp3", "aac", "m4a", "ogg", "wav", "amr", "opus") -> AttachmentType.Audio
         else -> AttachmentType.Document
     }
 }
 
 @RequiresApi(Build.VERSION_CODES.O)
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun ChatScreen(onLeave: () -> Unit, onRoomInfo: () -> Unit) {
     val context = LocalContext.current
@@ -113,7 +121,8 @@ fun ChatScreen(onLeave: () -> Unit, onRoomInfo: () -> Unit) {
                     }
                 }
                 if (done) { downloadProgress.remove(msgId); break }
-                delay(300)
+                delay(300
+                )
             }
         }
     }
@@ -145,17 +154,95 @@ fun ChatScreen(onLeave: () -> Unit, onRoomInfo: () -> Unit) {
     ) { uri ->
         pickerActive = false
         uri ?: return@rememberLauncherForActivityResult
+        // Persist read permission so the URI stays accessible on IO threads / after process resume
+        runCatching {
+            context.contentResolver.takePersistableUriPermission(
+                uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+            )
+        }
         val mimeType = context.contentResolver.getType(uri) ?: ""
         val type = when {
             mimeType.startsWith("image/") -> AttachmentType.Image
             mimeType.startsWith("video/") -> AttachmentType.Video
+            mimeType.startsWith("audio/") -> AttachmentType.Audio
             else -> AttachmentType.Document
         }
         pendingAttachment = MessageAttachment(uri, type, getFileNameFromUri(context, uri))
     }
 
+    // Voice recording state
+    var isRecording by remember { mutableStateOf(false) }
+    var recordingSeconds by remember { mutableStateOf(0) }
+    var audioRecorder by remember { mutableStateOf<MediaRecorder?>(null) }
+    var recordingFile by remember { mutableStateOf<java.io.File?>(null) }
+
+    val audioPermLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { /* next press will start recording */ }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            audioRecorder?.runCatching { stop(); release() }
+            audioRecorder = null
+        }
+    }
+
+    fun startRecording() {
+        val file = java.io.File(context.cacheDir, "voice_${System.currentTimeMillis()}.m4a")
+        recordingFile = file
+        try {
+            val mr = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) MediaRecorder(context)
+                     else @Suppress("DEPRECATION") MediaRecorder()
+            mr.apply {
+                setAudioSource(MediaRecorder.AudioSource.MIC)
+                setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+                setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+                setAudioSamplingRate(44100)
+                setAudioEncodingBitRate(128000)
+                setOutputFile(file.absolutePath)
+                prepare()
+                start()
+            }
+            audioRecorder = mr
+            isRecording = true
+        } catch (_: Exception) {
+            recordingFile = null
+        }
+    }
+
+    fun stopRecording(send: Boolean) {
+        val file = recordingFile
+        audioRecorder?.runCatching { stop(); release() }
+        audioRecorder = null
+        isRecording = false
+        recordingSeconds = 0
+        recordingFile = null
+        if (send && file != null && file.exists() && file.length() > 0) {
+            pendingAttachment = MessageAttachment(
+                uri = android.net.Uri.fromFile(file),
+                type = AttachmentType.Audio,
+                fileName = file.name
+            )
+        }
+    }
+
+    LaunchedEffect(isRecording) {
+        if (isRecording) {
+            recordingSeconds = 0
+            while (true) { delay(1000L); recordingSeconds++ }
+        }
+    }
+
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) listState.animateScrollToItem(messages.size - 1)
+    }
+
+    val imeVisible = WindowInsets.isImeVisible
+    LaunchedEffect(imeVisible) {
+        if (imeVisible && messages.isNotEmpty()) {
+            delay(100)
+            listState.animateScrollToItem(messages.size - 1)
+        }
     }
 
     fun sendMessage() {
@@ -166,7 +253,13 @@ fun ChatScreen(onLeave: () -> Unit, onRoomInfo: () -> Unit) {
         pendingAttachment = null
         coroutineScope.launch {
             if (attachment != null) {
-                val mimeType = context.contentResolver.getType(attachment.uri) ?: "application/octet-stream"
+                val mimeType = context.contentResolver.getType(attachment.uri)
+                    ?: when (attachment.type) {
+                        AttachmentType.Audio    -> "audio/mp4"
+                        AttachmentType.Image    -> "image/jpeg"
+                        AttachmentType.Video    -> "video/mp4"
+                        AttachmentType.Document -> "application/octet-stream"
+                    }
                 val result = ChatClient.uploadFile(context, attachment.uri, attachment.fileName, mimeType)
                 ChatClient.sendMessage(text, result.getOrNull())
             } else {
@@ -303,49 +396,109 @@ fun ChatScreen(onLeave: () -> Unit, onRoomInfo: () -> Unit) {
             }
         }
 
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(surfaceColor)
-                .padding(horizontal = 4.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(
-                onClick = {
-                    pickerActive = true
-                    filePickerLauncher.launch(arrayOf("image/*", "video/*", "application/*", "audio/*"))
-                },
-                enabled = uploadProgress == null
+        if (isRecording) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(surfaceColor)
+                    .padding(horizontal = 12.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(Icons.Default.AttachFile, "Прикрепить файл", tint = Purple)
-            }
-            OutlinedTextField(
-                value = inputText,
-                onValueChange = { inputText = it },
-                placeholder = {
-                    Text("Сообщение...", fontFamily = InterFontFamily, color = subtitleColor)
-                },
-                modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(24.dp),
-                singleLine = true,
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = Purple,
-                    unfocusedBorderColor = Color(0xFFCCCCCC),
-                    focusedTextColor = textColor,
-                    unfocusedTextColor = textColor,
-                    cursorColor = Purple
-                ),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                keyboardActions = KeyboardActions(onSend = { sendMessage() })
-            )
-            Spacer(Modifier.width(4.dp))
-            val canSend = (inputText.isNotBlank() || pendingAttachment != null) && uploadProgress == null
-            IconButton(onClick = { sendMessage() }, enabled = canSend) {
-                Icon(
-                    Icons.AutoMirrored.Filled.Send,
-                    "Отправить",
-                    tint = if (canSend) Purple else subtitleColor.copy(alpha = 0.4f)
+                IconButton(onClick = { stopRecording(send = false) }) {
+                    Icon(Icons.Default.Delete, "Отмена", tint = subtitleColor)
+                }
+                Spacer(Modifier.width(8.dp))
+                Box(
+                    modifier = Modifier
+                        .size(10.dp)
+                        .clip(CircleShape)
+                        .background(Color.Red)
                 )
+                Spacer(Modifier.width(8.dp))
+                val mins = recordingSeconds / 60
+                val secs = recordingSeconds % 60
+                Text(
+                    text = "$mins:${secs.toString().padStart(2, '0')}",
+                    fontSize = 16.sp,
+                    fontFamily = InterFontFamily,
+                    color = textColor,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.weight(1f)
+                )
+                Text(
+                    text = "Отпустите для отправки",
+                    fontSize = 12.sp,
+                    fontFamily = InterFontFamily,
+                    color = subtitleColor
+                )
+            }
+        } else {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(surfaceColor)
+                    .padding(horizontal = 4.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(
+                    onClick = {
+                        pickerActive = true
+                        filePickerLauncher.launch(arrayOf("image/*", "video/*", "application/*", "audio/*"))
+                    },
+                    enabled = uploadProgress == null
+                ) {
+                    Icon(Icons.Default.AttachFile, "Прикрепить файл", tint = Purple)
+                }
+                OutlinedTextField(
+                    value = inputText,
+                    onValueChange = { inputText = it },
+                    placeholder = {
+                        Text("Сообщение...", fontFamily = InterFontFamily, color = subtitleColor)
+                    },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(24.dp),
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = Purple,
+                        unfocusedBorderColor = Color(0xFFCCCCCC),
+                        focusedTextColor = textColor,
+                        unfocusedTextColor = textColor,
+                        cursorColor = Purple
+                    ),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                    keyboardActions = KeyboardActions(onSend = { sendMessage() })
+                )
+                Spacer(Modifier.width(4.dp))
+                val canSend = (inputText.isNotBlank() || pendingAttachment != null) && uploadProgress == null
+                if (canSend) {
+                    IconButton(onClick = { sendMessage() }) {
+                        Icon(Icons.AutoMirrored.Filled.Send, "Отправить", tint = Purple)
+                    }
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .pointerInput(Unit) {
+                                detectTapGestures(
+                                    onPress = {
+                                        val granted = context.checkSelfPermission(
+                                            Manifest.permission.RECORD_AUDIO
+                                        ) == PackageManager.PERMISSION_GRANTED
+                                        if (!granted) {
+                                            audioPermLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                                            return@detectTapGestures
+                                        }
+                                        startRecording()
+                                        tryAwaitRelease()
+                                        stopRecording(send = true)
+                                    }
+                                )
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.Mic, "Голосовое", tint = Purple)
+                    }
+                }
             }
         }
     } // end Column
@@ -559,6 +712,7 @@ private fun AttachmentView(
     downloadProgress: Float? = null,
     onDownload: () -> Unit = {}
 ) {
+    val context = LocalContext.current
     val overlayBg = if (isMe) Color.White.copy(alpha = 0.15f) else Purple.copy(alpha = 0.08f)
     val iconTint = if (isMe) Color.White else Purple
     val textColor = if (isMe) Color.White else Color(0xFF1A1A1A)
@@ -567,20 +721,22 @@ private fun AttachmentView(
     val displayName = attachment?.fileName ?: fileInfo?.fileName ?: "Файл"
     val canDownload = fileInfo != null && downloadProgress == null
 
-    val imageModel: Any? = when {
-        attachment != null -> attachment.uri
-        fileInfo != null -> {
-            if (fileInfo.fileUrl.startsWith("http")) fileInfo.fileUrl
-            else "${ChatClient.baseUrl}${fileInfo.fileUrl}"
-        }
-        else -> null
+    val remoteUrl: String? = fileInfo?.let {
+        if (it.fileUrl.startsWith("http")) it.fileUrl else "${ChatClient.baseUrl}${it.fileUrl}"
     }
 
     when (displayType) {
         AttachmentType.Image -> {
+            val imageRequest = remember(attachment, fileInfo) {
+                ImageRequest.Builder(context)
+                    .data(attachment?.uri ?: remoteUrl)
+                    .crossfade(true)
+                    .apply { ChatClient.getAuthHeader()?.let { h -> addHeader("Authorization", h) } }
+                    .build()
+            }
             Box {
                 AsyncImage(
-                    model = imageModel,
+                    model = imageRequest,
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
@@ -614,6 +770,16 @@ private fun AttachmentView(
                     trackColor = iconTint.copy(alpha = 0.2f)
                 )
             }
+        }
+
+        AttachmentType.Audio -> {
+            AudioPlayerView(
+                localUri = attachment?.uri,
+                remoteUrl = remoteUrl,
+                isMe = isMe,
+                fileInfo = fileInfo,
+                onDownload = onDownload
+            )
         }
 
         AttachmentType.Video, AttachmentType.Document -> {
@@ -662,6 +828,116 @@ private fun AttachmentView(
                         trackColor = iconTint.copy(alpha = 0.2f)
                     )
                 }
+            }
+        }
+    }
+}
+
+private fun formatAudioDuration(ms: Int): String {
+    val s = ms / 1000
+    return "${s / 60}:${(s % 60).toString().padStart(2, '0')}"
+}
+
+@Composable
+private fun AudioPlayerView(
+    localUri: android.net.Uri?,
+    remoteUrl: String?,
+    isMe: Boolean,
+    fileInfo: FileInfo?,
+    onDownload: () -> Unit
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val iconTint = if (isMe) Color.White else Purple
+    val overlayBg = if (isMe) Color.White.copy(alpha = 0.15f) else Purple.copy(alpha = 0.08f)
+    val labelColor = if (isMe) Color.White.copy(alpha = 0.7f) else Color(0xFF888888)
+
+    var prepared by remember { mutableStateOf(false) }
+    var isPlaying by remember { mutableStateOf(false) }
+    var progress by remember { mutableStateOf(0f) }
+    var durationMs by remember { mutableStateOf(0) }
+
+    val player = remember { MediaPlayer() }
+    DisposableEffect(Unit) { onDispose { player.release() } }
+
+    fun togglePlay() {
+        if (prepared) {
+            if (isPlaying) { player.pause(); isPlaying = false }
+            else {
+                player.start(); isPlaying = true
+                scope.launch {
+                    while (player.isPlaying) {
+                        if (durationMs > 0) progress = player.currentPosition.toFloat() / durationMs
+                        delay(80)
+                    }
+                    if (!player.isPlaying) { isPlaying = false; progress = 0f }
+                }
+            }
+            return
+        }
+        try {
+            player.reset()
+            when {
+                localUri != null -> player.setDataSource(localUri.path!!)
+                remoteUrl != null -> {
+                    val headers = ChatClient.getAuthHeader()
+                        ?.let { mapOf("Authorization" to it) } ?: emptyMap()
+                    player.setDataSource(context, android.net.Uri.parse(remoteUrl), headers)
+                }
+                else -> return
+            }
+            player.setOnPreparedListener { mp ->
+                prepared = true
+                durationMs = mp.duration
+                mp.start()
+                isPlaying = true
+                scope.launch {
+                    while (player.isPlaying) {
+                        if (durationMs > 0) progress = player.currentPosition.toFloat() / durationMs
+                        delay(80)
+                    }
+                    isPlaying = false; progress = 0f
+                }
+            }
+            player.setOnCompletionListener { isPlaying = false; progress = 0f; prepared = false }
+            player.prepareAsync()
+        } catch (_: Exception) {}
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(overlayBg)
+            .padding(horizontal = 4.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        IconButton(onClick = { togglePlay() }, modifier = Modifier.size(40.dp)) {
+            Icon(
+                imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                contentDescription = null,
+                tint = iconTint,
+                modifier = Modifier.size(26.dp)
+            )
+        }
+        Column(modifier = Modifier.weight(1f).padding(horizontal = 4.dp)) {
+            LinearProgressIndicator(
+                progress = { progress },
+                modifier = Modifier.fillMaxWidth(),
+                color = iconTint,
+                trackColor = iconTint.copy(alpha = 0.25f)
+            )
+            Spacer(Modifier.height(3.dp))
+            Text(
+                text = if (durationMs > 0) formatAudioDuration(durationMs) else "Голосовое",
+                fontSize = 11.sp,
+                fontFamily = InterFontFamily,
+                color = labelColor
+            )
+        }
+        if (fileInfo != null) {
+            IconButton(onClick = onDownload, modifier = Modifier.size(32.dp)) {
+                Icon(Icons.Default.Download, null, tint = iconTint, modifier = Modifier.size(18.dp))
             }
         }
     }
