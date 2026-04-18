@@ -48,6 +48,11 @@ class SessionStore {
         sessionsById[sessionId]
     }
 
+    suspend fun getUserBySessionId(sessionId: String): User? = mutex.withLock {
+        val userId = sessionsById[sessionId] ?: return@withLock null
+        usersById[userId]
+    }
+
     suspend fun getRoomState(): RoomState = mutex.withLock {
         roomStateUnsafe()
     }
@@ -63,13 +68,34 @@ class SessionStore {
             timeEpochMillis = System.currentTimeMillis(),
             fileInfo = fileInfo
         )
-
         messages.addLast(message)
         if (messages.size > MAX_MESSAGES) {
             messages.removeFirst()
         }
-
         message
+    }
+
+    suspend fun addFileMessage(sessionId: String, fileId: String): ChatMessage? {
+        val fileInfo = FileInfo(
+            id = fileId,
+            fileName = fileId,
+            size = 0,
+            fileUrl = "/files/$fileId"
+        )
+        return addMessage(
+            sessionId = sessionId,
+            text = "Shared file: $fileId",
+            fileInfo = fileInfo
+        )
+    }
+
+    suspend fun leave(sessionId: String): User? = mutex.withLock {
+        val userId = sessionsById.remove(sessionId) ?: return@withLock null
+        val hasOtherSessions = sessionsById.values.any { it == userId }
+        if (hasOtherSessions) {
+            return@withLock null
+        }
+        usersById.remove(userId)
     }
 
     private fun roomStateUnsafe(): RoomState {
@@ -79,4 +105,3 @@ class SessionStore {
         )
     }
 }
-
