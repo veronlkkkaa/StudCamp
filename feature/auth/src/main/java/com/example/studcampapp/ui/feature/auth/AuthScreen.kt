@@ -60,9 +60,7 @@ fun AuthScreen(
                     UserStore.login(
                         User(
                             id = UUID.randomUUID().toString(),
-                            firstName = "",
-                            lastName = "",
-                            username = username.trim().removePrefix("@"),
+                            login = username.trim().removePrefix("@"),
                             phone = phone.trim()
                         )
                     )

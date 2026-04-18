@@ -25,8 +25,8 @@ import com.example.studcampapp.ui.theme.*
 fun EditProfileScreen(onBack: () -> Unit) {
     val user = UserStore.currentUser ?: return
 
-    var username by remember { mutableStateOf(user.username) }
-    var phone by remember { mutableStateOf(user.phone) }
+    var username by remember { mutableStateOf(user.login) }
+    var phone by remember { mutableStateOf(user.phone ?: "") }
     var usernameError by remember { mutableStateOf<String?>(null) }
 
     val fieldColors = OutlinedTextFieldDefaults.colors(
@@ -111,7 +111,7 @@ fun EditProfileScreen(onBack: () -> Unit) {
                         usernameError = "Никнейм не может быть пустым"
                         return@Button
                     }
-                    UserStore.updateProfile(username = username.trim(), phone = phone.trim())
+                    UserStore.updateProfile(login = username.trim(), phone = phone.trim())
                     onBack()
                 },
                 modifier = Modifier.fillMaxWidth().height(56.dp),

@@ -1,12 +1,15 @@
 package com.example.studcampapp.model
 
-import android.net.Uri
+import kotlinx.serialization.Serializable
 
+@Serializable
 data class User(
     val id: String,
-    val firstName: String,
-    val lastName: String,
-    val username: String,
-    val phone: String,
-    val avatarUri: Uri? = null
+    val login: String,
+    val firstName: String? = null,
+    val lastName: String? = null,
+    val middleName: String? = null,
+    val avatarUrl: String? = null,
+    val phone: String? = null,
+    val email: String? = null
 )

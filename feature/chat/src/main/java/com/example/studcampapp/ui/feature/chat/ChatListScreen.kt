@@ -49,6 +49,7 @@ fun ChatListScreen(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             val user = UserStore.currentUser
+            val localAvatarUri = UserStore.localAvatarUri
             Surface(
                 onClick = onProfileClick,
                 color = androidx.compose.ui.graphics.Color.Transparent,
@@ -60,9 +61,9 @@ fun ChatListScreen(
                         .clip(CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
-                    if (user?.avatarUri != null) {
+                    if (localAvatarUri != null) {
                         AsyncImage(
-                            model = user.avatarUri,
+                            model = localAvatarUri,
                             contentDescription = "Аватар",
                             contentScale = ContentScale.Crop,
                             modifier = Modifier.fillMaxSize()
@@ -77,7 +78,7 @@ fun ChatListScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = user?.firstName?.firstOrNull()?.toString() ?: "?",
+                                text = user?.firstName?.firstOrNull()?.toString() ?: user?.login?.firstOrNull()?.toString() ?: "?",
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.Bold,
                                 fontFamily = InterFontFamily,

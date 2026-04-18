@@ -36,6 +36,7 @@ import com.example.studcampapp.ui.theme.*
 @Composable
 fun ProfileScreen(onBack: () -> Unit, onLogout: () -> Unit = onBack, onEditProfile: () -> Unit = {}) {
     val user = UserStore.currentUser
+    val localAvatarUri = UserStore.localAvatarUri
 
     val avatarPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -133,9 +134,9 @@ fun ProfileScreen(onBack: () -> Unit, onLogout: () -> Unit = onBack, onEditProfi
                         .clickable { avatarPicker.launch("image/*") },
                     contentAlignment = Alignment.Center
                 ) {
-                    if (user.avatarUri != null) {
+                    if (localAvatarUri != null) {
                         AsyncImage(
-                            model = user.avatarUri,
+                            model = localAvatarUri,
                             contentDescription = "Аватар",
                             contentScale = ContentScale.Crop,
                             modifier = Modifier.fillMaxSize()
@@ -150,7 +151,7 @@ fun ProfileScreen(onBack: () -> Unit, onLogout: () -> Unit = onBack, onEditProfi
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = user.firstName.firstOrNull()?.toString() ?: "?",
+                                text = user.firstName?.firstOrNull()?.toString() ?: "?",
                                 fontSize = 38.sp,
                                 fontWeight = FontWeight.Bold,
                                 fontFamily = InterFontFamily,
@@ -185,7 +186,7 @@ fun ProfileScreen(onBack: () -> Unit, onLogout: () -> Unit = onBack, onEditProfi
                 Spacer(modifier = Modifier.height(14.dp))
 
                 Text(
-                    text = "${user.firstName} ${user.lastName}",
+                    text = "${user.firstName.orEmpty()} ${user.lastName.orEmpty()}".trim().ifBlank { user.login },
                     fontSize = 24.sp,
                     fontWeight = FontWeight.Bold,
                     fontFamily = InterFontFamily,
@@ -193,16 +194,16 @@ fun ProfileScreen(onBack: () -> Unit, onLogout: () -> Unit = onBack, onEditProfi
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "@${user.username}",
+                    text = "@${user.login}",
                     fontSize = 14.sp,
                     fontFamily = InterFontFamily,
                     color = Wisteria
                 )
 
-                if (user.phone.isNotBlank()) {
+                if (!user.phone.isNullOrBlank()) {
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text = user.phone,
+                        text = user.phone.orEmpty(),
                         fontSize = 13.sp,
                         fontFamily = InterFontFamily,
                         color = TextSecondary
