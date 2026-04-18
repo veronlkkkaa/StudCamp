@@ -1,7 +1,10 @@
 package com.example.studcampapp.ui.feature.chat
 
+import android.os.Build
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
@@ -48,6 +51,7 @@ private fun getFileNameFromUri(context: android.content.Context, uri: android.ne
     return name
 }
 
+@RequiresApi(Build.VERSION_CODES.O)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatScreen(onLeave: () -> Unit, onRoomInfo: () -> Unit) {
@@ -69,11 +73,16 @@ fun ChatScreen(onLeave: () -> Unit, onRoomInfo: () -> Unit) {
     var inputText by remember { mutableStateOf("") }
     var pendingAttachment by remember { mutableStateOf<MessageAttachment?>(null) }
     var readReceiptMessage by remember { mutableStateOf<ChatMessage?>(null) }
+    var pickerActive by remember { mutableStateOf(false) }
+
+    BackHandler(enabled = pickerActive) { pickerActive = false }
+    val uploadProgress = remember { mutableStateMapOf<Int, Float>() }
     val listState = rememberLazyListState()
 
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
+        pickerActive = false
         uri ?: return@rememberLauncherForActivityResult
         val mimeType = context.contentResolver.getType(uri) ?: ""
         val type = when {
@@ -101,10 +110,22 @@ fun ChatScreen(onLeave: () -> Unit, onRoomInfo: () -> Unit) {
                 attachment = pendingAttachment
             )
         )
+        val msgId = idx + 1
         inputText = ""
         pendingAttachment = null
         coroutineScope.launch {
-            delay(800)
+            if (fakeMessages[idx].attachment != null) {
+                uploadProgress[msgId] = 0f
+                val steps = 30
+                repeat(steps) { i ->
+                    delay(80L)
+                    uploadProgress[msgId] = (i + 1).toFloat() / steps
+                }
+                delay(150)
+                uploadProgress.remove(msgId)
+            } else {
+                delay(800)
+            }
             if (idx < fakeMessages.size) {
                 fakeMessages[idx] = fakeMessages[idx].copy(status = MessageStatus.Sent)
             }
@@ -238,6 +259,7 @@ fun ChatScreen(onLeave: () -> Unit, onRoomInfo: () -> Unit) {
             items(fakeMessages) { message ->
                 MessageBubble(
                     message = message,
+                    uploadProgress = uploadProgress[message.id],
                     onLongPress = { readReceiptMessage = message }
                 )
             }
@@ -289,6 +311,7 @@ fun ChatScreen(onLeave: () -> Unit, onRoomInfo: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = {
+                pickerActive = true
                 filePickerLauncher.launch(arrayOf("image/*", "video/*", "application/*", "audio/*"))
             }) {
                 Icon(Icons.Default.AttachFile, "Прикрепить файл", tint = Purple)
@@ -329,7 +352,11 @@ fun ChatScreen(onLeave: () -> Unit, onRoomInfo: () -> Unit) {
 }
 
 @Composable
-fun MessageBubble(message: ChatMessage, onLongPress: () -> Unit = {}) {
+fun MessageBubble(
+    message: ChatMessage,
+    uploadProgress: Float? = null,
+    onLongPress: () -> Unit = {}
+) {
     val isMe = message.author == "Я"
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -376,29 +403,37 @@ fun MessageBubble(message: ChatMessage, onLongPress: () -> Unit = {}) {
             }
 
             if (isMe) {
-                Spacer(Modifier.height(2.dp))
-                Row(
-                    modifier = Modifier.align(Alignment.End),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    when (message.status) {
-                        MessageStatus.Sending -> CircularProgressIndicator(
-                            modifier = Modifier.size(10.dp),
-                            strokeWidth = 1.5.dp,
-                            color = Color.White.copy(alpha = 0.7f)
-                        )
-                        MessageStatus.Sent -> Icon(
-                            Icons.Default.Done,
-                            null,
-                            tint = Color.White.copy(alpha = 0.7f),
-                            modifier = Modifier.size(14.dp)
-                        )
-                        MessageStatus.Read -> Icon(
-                            Icons.Default.DoneAll,
-                            null,
-                            tint = Color.White,
-                            modifier = Modifier.size(14.dp)
-                        )
+                if (uploadProgress != null) {
+                    Spacer(Modifier.height(6.dp))
+                    NyanCatProgressBar(
+                        progress = uploadProgress,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                } else {
+                    Spacer(Modifier.height(2.dp))
+                    Row(
+                        modifier = Modifier.align(Alignment.End),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        when (message.status) {
+                            MessageStatus.Sending -> CircularProgressIndicator(
+                                modifier = Modifier.size(10.dp),
+                                strokeWidth = 1.5.dp,
+                                color = Color.White.copy(alpha = 0.7f)
+                            )
+                            MessageStatus.Sent -> Icon(
+                                Icons.Default.Done,
+                                null,
+                                tint = Color.White.copy(alpha = 0.7f),
+                                modifier = Modifier.size(14.dp)
+                            )
+                            MessageStatus.Read -> Icon(
+                                Icons.Default.DoneAll,
+                                null,
+                                tint = Color.White,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
                     }
                 }
             }
