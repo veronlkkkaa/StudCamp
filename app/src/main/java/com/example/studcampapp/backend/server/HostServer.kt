@@ -38,7 +38,7 @@ class HostServer(
     fun start() {
         if (engine != null) return
 
-        engine = embeddedServer(
+        val startedEngine = embeddedServer(
             factory = CIO,
             host = host,
             port = port,
@@ -46,6 +46,9 @@ class HostServer(
                 hostModule(sessionStore)
             }
         ).start(wait = false)
+
+        engine = startedEngine
+        println("HostServer started on $host:$port")
     }
 
     @Synchronized
