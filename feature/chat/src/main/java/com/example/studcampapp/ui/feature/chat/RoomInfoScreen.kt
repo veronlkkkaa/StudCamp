@@ -17,15 +17,16 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.studcampapp.model.RoomParticipant
+import com.example.studcampapp.model.ChatClient
 import com.example.studcampapp.model.RoomStore
-import com.example.studcampapp.model.UserStore
+import com.example.studcampapp.model.User
 import com.example.studcampapp.ui.theme.*
 
 @Composable
 fun RoomInfoScreen(onBack: () -> Unit) {
-    val room = RoomStore.currentRoom
-    val isGuest = UserStore.currentUser == null
+    val roomName = RoomStore.currentRoom.name
+    val participants = ChatClient.participants
+    val myUserId = ChatClient.myUser?.id
 
     Column(
         modifier = Modifier
@@ -52,76 +53,57 @@ fun RoomInfoScreen(onBack: () -> Unit) {
             )
         }
 
-        room?.let { room ->
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                item {
-                    Surface(
-                        shape = RoundedCornerShape(16.dp),
-                        color = DarkSurface,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(modifier = Modifier.padding(20.dp)) {
-                            Text(
-                                text = room.name,
-                                fontSize = 22.sp,
-                                fontWeight = FontWeight.Bold,
-                                fontFamily = InterFontFamily,
-                                color = TextPrimary
-                            )
-                            Spacer(Modifier.height(8.dp))
-                            Text(
-                                text = "Создал: ${room.creatorName}",
-                                fontSize = 14.sp,
-                                fontFamily = InterFontFamily,
-                                color = TextSecondary
-                            )
-                            Spacer(Modifier.height(2.dp))
-                            Text(
-                                text = "Участников: ${room.participants.size}",
-                                fontSize = 14.sp,
-                                fontFamily = InterFontFamily,
-                                color = TextSecondary
-                            )
-                        }
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            item {
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = DarkSurface,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(20.dp)) {
+                        Text(
+                            text = roomName,
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = InterFontFamily,
+                            color = TextPrimary
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = "Участников: ${participants.size}",
+                            fontSize = 14.sp,
+                            fontFamily = InterFontFamily,
+                            color = TextSecondary
+                        )
                     }
                 }
+            }
 
-                item {
-                    Text(
-                        text = "Участники",
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        fontFamily = InterFontFamily,
-                        color = Wisteria,
-                        modifier = Modifier.padding(vertical = 4.dp)
-                    )
-                }
+            item {
+                Text(
+                    text = "Участники",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    fontFamily = InterFontFamily,
+                    color = Wisteria,
+                    modifier = Modifier.padding(vertical = 4.dp)
+                )
+            }
 
-                items(room.participants) { participant ->
-                    ParticipantItem(
-                        participant = participant,
-                        creatorId = room.creatorId,
-                        viewerIsGuest = isGuest
-                    )
-                }
+            items(participants, key = { it.id }) { user ->
+                ParticipantItem(user = user, isMe = user.id == myUserId)
             }
         }
     }
 }
 
 @Composable
-fun ParticipantItem(
-    participant: RoomParticipant,
-    creatorId: String,
-    viewerIsGuest: Boolean
-) {
-    val showAnonymous = viewerIsGuest && participant.isGuest
-    val displayName = if (showAnonymous) "Аноним" else participant.displayName
-    val initial = if (showAnonymous) "?" else participant.displayName.first().toString()
+fun ParticipantItem(user: User, isMe: Boolean = false) {
+    val initial = user.login.firstOrNull()?.toString() ?: "?"
 
     Surface(
         shape = RoundedCornerShape(12.dp),
@@ -137,10 +119,7 @@ fun ParticipantItem(
                     .size(40.dp)
                     .clip(CircleShape)
                     .background(
-                        if (participant.isGuest)
-                            Brush.radialGradient(listOf(DarkCard, DarkSurface))
-                        else
-                            Brush.radialGradient(listOf(PurpleLight, PurpleVibrant))
+                        Brush.radialGradient(listOf(PurpleLight, PurpleVibrant))
                     ),
                 contentAlignment = Alignment.Center
             ) {
@@ -155,31 +134,22 @@ fun ParticipantItem(
 
             Spacer(Modifier.width(12.dp))
 
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = displayName,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Medium,
-                    fontFamily = InterFontFamily,
-                    color = TextPrimary
-                )
-                if (participant.isGuest) {
-                    Text(
-                        text = "Гость",
-                        fontSize = 12.sp,
-                        fontFamily = InterFontFamily,
-                        color = TextSecondary
-                    )
-                }
-            }
+            Text(
+                text = user.login,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Medium,
+                fontFamily = InterFontFamily,
+                color = TextPrimary,
+                modifier = Modifier.weight(1f)
+            )
 
-            if (participant.id == creatorId) {
+            if (isMe) {
                 Surface(
                     shape = RoundedCornerShape(8.dp),
                     color = Purple.copy(alpha = 0.3f)
                 ) {
                     Text(
-                        text = "Создатель",
+                        text = "Вы",
                         fontSize = 11.sp,
                         fontFamily = InterFontFamily,
                         color = Wisteria,

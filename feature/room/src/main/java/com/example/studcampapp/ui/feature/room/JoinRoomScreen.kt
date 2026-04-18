@@ -9,23 +9,29 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.studcampapp.model.ChatClient
+import com.example.studcampapp.model.RoomHistoryStore
+import com.example.studcampapp.model.RoomStore
+import com.example.studcampapp.model.SavedRoom
 import com.example.studcampapp.ui.theme.*
+import kotlinx.coroutines.launch
 
 @Composable
 fun JoinRoomScreen(
     onBack: () -> Unit,
-    onJoined: (roomCode: String) -> Unit
+    onJoined: () -> Unit
 ) {
     var ip by remember { mutableStateOf("") }
-    var port by remember { mutableStateOf("") }
-    var roomId by remember { mutableStateOf("") }
+    var port by remember { mutableStateOf("8080") }
     var nickname by remember { mutableStateOf("") }
+    var isLoading by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
 
     Box(
         modifier = Modifier
@@ -62,7 +68,7 @@ fun JoinRoomScreen(
             )
 
             Text(
-                text = "Введи адрес сервера и выбери комнату",
+                text = "Введи адрес сервера и свой ник",
                 fontSize = 14.sp,
                 fontFamily = InterFontFamily,
                 color = TextSecondary
@@ -73,7 +79,7 @@ fun JoinRoomScreen(
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(
                     value = ip,
-                    onValueChange = { ip = it },
+                    onValueChange = { ip = it; error = null },
                     label = { Text("IP-адрес", fontFamily = InterFontFamily, color = TextSecondary) },
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(16.dp),
@@ -82,7 +88,7 @@ fun JoinRoomScreen(
                 )
                 OutlinedTextField(
                     value = port,
-                    onValueChange = { port = it.filter { c -> c.isDigit() } },
+                    onValueChange = { port = it.filter { c -> c.isDigit() }; error = null },
                     label = { Text("Порт", fontFamily = InterFontFamily, color = TextSecondary) },
                     modifier = Modifier.width(100.dp),
                     shape = RoundedCornerShape(16.dp),
@@ -92,18 +98,8 @@ fun JoinRoomScreen(
             }
 
             OutlinedTextField(
-                value = roomId,
-                onValueChange = { roomId = it },
-                label = { Text("ID комнаты", fontFamily = InterFontFamily, color = TextSecondary) },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                colors = textFieldColors(),
-                singleLine = true
-            )
-
-            OutlinedTextField(
                 value = nickname,
-                onValueChange = { nickname = it },
+                onValueChange = { nickname = it; error = null },
                 label = { Text("Твой ник", fontFamily = InterFontFamily, color = TextSecondary) },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
@@ -111,14 +107,49 @@ fun JoinRoomScreen(
                 singleLine = true
             )
 
+            if (error != null) {
+                Text(
+                    text = error!!,
+                    color = MaterialTheme.colorScheme.error,
+                    fontSize = 13.sp,
+                    fontFamily = InterFontFamily
+                )
+            }
+
             Spacer(modifier = Modifier.weight(1f))
 
             Button(
                 onClick = {
-                    if (ip.isNotBlank() && port.isNotBlank() && roomId.isNotBlank() && nickname.isNotBlank()) {
-                        onJoined(roomId.trim())
+                    val portInt = port.toIntOrNull() ?: return@Button
+                    if (ip.isBlank() || nickname.isBlank()) return@Button
+                    isLoading = true
+                    error = null
+                    scope.launch {
+                        val trimmedIp = ip.trim()
+                        ChatClient.join(trimmedIp, portInt, nickname.trim())
+                            .onSuccess {
+                                val roomName = "$trimmedIp:$portInt"
+                                RoomStore.setRoomName(roomName)
+                                RoomHistoryStore.saveRoom(
+                                    SavedRoom(
+                                        id = "$trimmedIp:$portInt",
+                                        name = roomName,
+                                        serverIp = trimmedIp,
+                                        serverPort = portInt,
+                                        myNickname = nickname.trim(),
+                                        lastVisited = System.currentTimeMillis()
+                                    )
+                                )
+                                ChatClient.connect()
+                                onJoined()
+                            }
+                            .onFailure { e ->
+                                error = "Не удалось подключиться: ${e.message}"
+                            }
+                        isLoading = false
                     }
                 },
+                enabled = !isLoading && ip.isNotBlank() && port.isNotBlank() && nickname.isNotBlank(),
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
@@ -136,13 +167,17 @@ fun JoinRoomScreen(
                         ),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        "Подключиться",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = InterFontFamily,
-                        color = TextPrimary
-                    )
+                    if (isLoading) {
+                        CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+                    } else {
+                        Text(
+                            "Подключиться",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = InterFontFamily,
+                            color = TextPrimary
+                        )
+                    }
                 }
             }
         }
