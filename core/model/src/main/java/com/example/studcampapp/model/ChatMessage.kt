@@ -17,7 +17,7 @@ private object LocalDateTimeSerializer : KSerializer<LocalDateTime> {
 @Serializable
 enum class MessageStatus { Sending, Sent, Read }
 
-enum class AttachmentType { Image, Video, Document }
+enum class AttachmentType { Image, Video, Document, Audio }
 
 data class MessageAttachment(
     val uri: android.net.Uri,
