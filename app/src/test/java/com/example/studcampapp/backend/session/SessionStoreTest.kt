@@ -42,5 +42,33 @@ class SessionStoreTest {
 
         assertNull(userId)
     }
+
+    @Test
+    fun addMessage_keepsOnlyLast500Messages() = runBlocking {
+        val store = SessionStore()
+        val joinResponse = store.join(
+            JoinRequest(
+                login = "user_1",
+                firstName = null,
+                lastName = null,
+                middleName = null,
+                avatarUrl = null,
+                phone = null,
+                email = null
+            )
+        )
+
+        repeat(501) { index ->
+            store.addMessage(
+                sessionId = joinResponse.sessionId,
+                text = "msg-${index + 1}"
+            )
+        }
+
+        val state = store.getRoomState()
+        assertEquals(500, state.messages.size)
+        assertEquals(2, state.messages.first().id)
+        assertEquals(501, state.messages.last().id)
+    }
 }
 

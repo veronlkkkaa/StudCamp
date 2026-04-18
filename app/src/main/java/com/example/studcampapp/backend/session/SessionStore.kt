@@ -11,10 +11,14 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 class SessionStore {
+    private companion object {
+        const val MAX_MESSAGES = 500
+    }
+
     private val mutex = Mutex()
     private val usersById = LinkedHashMap<String, User>()
     private val sessionsById = LinkedHashMap<String, String>()
-    private val messages = ArrayList<ChatMessage>()
+    private val messages = ArrayDeque<ChatMessage>()
     private var nextMessageId = 1
 
     suspend fun join(request: JoinRequest): JoinResponse = mutex.withLock {
@@ -64,7 +68,10 @@ class SessionStore {
             timeEpochMillis = System.currentTimeMillis(),
             fileInfo = fileInfo
         )
-        messages.add(message)
+        messages.addLast(message)
+        if (messages.size > MAX_MESSAGES) {
+            messages.removeFirst()
+        }
         message
     }
 
@@ -88,7 +95,6 @@ class SessionStore {
         if (hasOtherSessions) {
             return@withLock null
         }
-
         usersById.remove(userId)
     }
 
@@ -99,4 +105,3 @@ class SessionStore {
         )
     }
 }
-
