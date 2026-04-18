@@ -1,19 +1,30 @@
 package com.example.studcampapp.backend.server
 
+import com.example.studcampapp.backend.file.FileStore
 import com.example.studcampapp.backend.session.SessionStore
+import com.example.studcampapp.model.dto.JoinRequest
+import com.example.studcampapp.model.dto.UploadResponse
 import com.example.studcampapp.model.ws.WsClientEvent
 import com.example.studcampapp.model.ws.WsServerEvent
-import com.example.studcampapp.model.dto.JoinRequest
+import io.ktor.http.ContentDisposition
+import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.content.PartData
+import io.ktor.http.content.forEachPart
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
+import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.call
 import io.ktor.server.application.install
 import io.ktor.server.cio.CIO
 import io.ktor.server.engine.ApplicationEngine
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.server.request.receiveMultipart
 import io.ktor.server.request.receive
+import io.ktor.server.response.header
+import io.ktor.server.response.respondFile
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
@@ -21,18 +32,30 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
 import io.ktor.server.websocket.WebSockets
 import io.ktor.server.websocket.webSocket
+import io.ktor.utils.io.core.readBytes
 import io.ktor.websocket.CloseReason
 import io.ktor.websocket.Frame
 import io.ktor.websocket.close
 import io.ktor.websocket.readText
+import java.io.File
+import java.util.UUID
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 
 class HostServer(
     private val sessionStore: SessionStore,
+    private val fileStore: FileStore,
     private val host: String = "0.0.0.0",
     private val port: Int = 8080
 ) {
     private var engine: ApplicationEngine? = null
+    private val connectionRegistry = WsConnectionRegistry()
+    private val wsJson = Json {
+        ignoreUnknownKeys = true
+        encodeDefaults = true
+        explicitNulls = false
+        classDiscriminator = "type"
+    }
 
     @Synchronized
     fun start() {
@@ -43,7 +66,12 @@ class HostServer(
             host = host,
             port = port,
             module = {
-                hostModule(sessionStore)
+                hostModule(
+                    sessionStore = sessionStore,
+                    fileStore = fileStore,
+                    connectionRegistry = connectionRegistry,
+                    wsJson = wsJson
+                )
             }
         ).start(wait = false)
 
@@ -53,19 +81,35 @@ class HostServer(
 
     @Synchronized
     fun stop() {
+        runBlocking {
+            connectionRegistry.broadcast(WsServerEvent.HostClosed, wsJson)
+            connectionRegistry.closeAll(CloseReason(CloseReason.Codes.NORMAL, "Host stopped"))
+            sessionStore.clear()
+            fileStore.clear()
+            stopNsdPublisher()
+        }
+
         engine?.stop(gracePeriodMillis = 1_000, timeoutMillis = 2_000)
         engine = null
     }
+
+    private fun stopNsdPublisher() {
+        // NSD lifecycle will be connected in issue #31.
+    }
 }
 
-fun Application.hostModule(sessionStore: SessionStore) {
-    val wsJson = Json {
+fun Application.hostModule(
+    sessionStore: SessionStore,
+    fileStore: FileStore = FileStore(File(System.getProperty("java.io.tmpdir"), "studcamp-files-${UUID.randomUUID()}")),
+    connectionRegistry: WsConnectionRegistry = WsConnectionRegistry(),
+    wsJson: Json = Json {
         ignoreUnknownKeys = true
         encodeDefaults = true
         explicitNulls = false
         classDiscriminator = "type"
     }
-    val connectionRegistry = WsConnectionRegistry()
+) {
+    val maxFileSizeBytes = 100L * 1024L * 1024L
 
     install(ContentNegotiation) {
         json(wsJson)
@@ -93,8 +137,77 @@ fun Application.hostModule(sessionStore: SessionStore) {
             call.respond(HttpStatusCode.OK, response)
         }
 
+        post("/files/upload") {
+            val sessionId = extractSessionId(call)
+            if (sessionId.isNullOrBlank() || sessionStore.getUserBySessionId(sessionId) == null) {
+                call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid session"))
+                return@post
+            }
+
+            var uploadedFileInfo: com.example.studcampapp.model.FileInfo? = null
+            var tooLarge = false
+
+            call.receiveMultipart().forEachPart { part ->
+                if (part is PartData.FileItem && uploadedFileInfo == null) {
+                    val bytes = part.provider().readBytes()
+                    if (bytes.size.toLong() > maxFileSizeBytes) {
+                        tooLarge = true
+                    } else {
+                        val originalName = part.originalFileName ?: "upload.bin"
+                        val mimeType = part.contentType?.toString() ?: "application/octet-stream"
+                        uploadedFileInfo = fileStore.saveFile(
+                            originalName = originalName,
+                            mimeType = mimeType,
+                            bytes = bytes
+                        )
+                    }
+                }
+                part.dispose()
+            }
+
+            if (tooLarge) {
+                call.respond(HttpStatusCode.PayloadTooLarge, mapOf("error" to "File is larger than 100MB"))
+                return@post
+            }
+
+            val fileInfo = uploadedFileInfo
+            if (fileInfo == null) {
+                call.respond(HttpStatusCode.BadRequest, mapOf("error" to "No file in multipart payload"))
+                return@post
+            }
+
+            connectionRegistry.broadcast(WsServerEvent.FileShared(fileInfo), wsJson)
+            call.respond(HttpStatusCode.OK, UploadResponse(fileInfo))
+        }
+
+        get("/files/{id}") {
+            val fileId = call.parameters["id"]
+            if (fileId.isNullOrBlank()) {
+                call.respond(HttpStatusCode.BadRequest, mapOf("error" to "file id is required"))
+                return@get
+            }
+
+            val stored = fileStore.getStoredFile(fileId)
+            if (stored == null) {
+                call.respond(HttpStatusCode.NotFound, mapOf("error" to "File not found"))
+                return@get
+            }
+
+            val contentType = runCatching { ContentType.parse(stored.mimeType) }
+                .getOrDefault(ContentType.Application.OctetStream)
+            call.response.header(
+                HttpHeaders.ContentDisposition,
+                ContentDisposition.Attachment.withParameter(ContentDisposition.Parameters.FileName, stored.fileInfo.fileName).toString()
+            )
+            call.response.header(HttpHeaders.ContentType, contentType.toString())
+            call.respondFile(stored.file, configure = {
+                // content type set through headers for broader compatibility
+            })
+        }
+
         wsRoute(
             sessionStore = sessionStore,
+            fileStore = fileStore,
             connectionRegistry = connectionRegistry,
             wsJson = wsJson
         )
@@ -103,6 +216,7 @@ fun Application.hostModule(sessionStore: SessionStore) {
 
 private fun Route.wsRoute(
     sessionStore: SessionStore,
+    fileStore: FileStore,
     connectionRegistry: WsConnectionRegistry,
     wsJson: Json
 ) {
@@ -178,9 +292,20 @@ private fun Route.wsRoute(
                     }
 
                     is WsClientEvent.SendFile -> {
-                        val message = sessionStore.addFileMessage(
+                        val fileInfo = fileStore.getFileInfo(clientEvent.fileId)
+                        if (fileInfo == null) {
+                            connectionRegistry.sendTo(
+                                sessionId,
+                                WsServerEvent.Error("FILE_NOT_FOUND", "Unknown fileId"),
+                                wsJson
+                            )
+                            continue
+                        }
+
+                        val message = sessionStore.addMessage(
                             sessionId = sessionId,
-                            fileId = clientEvent.fileId
+                            text = "Shared file: ${fileInfo.fileName}",
+                            fileInfo = fileInfo
                         )
                         if (message == null) {
                             connectionRegistry.sendTo(
@@ -191,10 +316,7 @@ private fun Route.wsRoute(
                             continue
                         }
 
-                        val fileInfo = message.fileInfo
-                        if (fileInfo != null) {
-                            connectionRegistry.broadcast(WsServerEvent.FileShared(fileInfo), wsJson)
-                        }
+                        connectionRegistry.broadcast(WsServerEvent.FileShared(fileInfo), wsJson)
                         connectionRegistry.broadcast(WsServerEvent.NewMessage(message), wsJson)
                     }
                 }
@@ -206,6 +328,16 @@ private fun Route.wsRoute(
                 connectionRegistry.broadcast(WsServerEvent.UserLeft(leftUser.id), wsJson)
             }
         }
+    }
+}
+
+private fun extractSessionId(call: ApplicationCall): String? {
+    call.request.queryParameters["sessionId"]?.let { return it }
+    val header = call.request.headers[HttpHeaders.Authorization] ?: return null
+    return when {
+        header.startsWith("Bearer ", ignoreCase = true) -> header.removePrefix("Bearer ").trim()
+        header.startsWith("Session ", ignoreCase = true) -> header.removePrefix("Session ").trim()
+        else -> null
     }
 }
 
