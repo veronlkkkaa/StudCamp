@@ -13,4 +13,5 @@ object Route {
     @Serializable data object RoomOptions
     @Serializable data object CreateRoom
     @Serializable data object JoinRoom
+    @Serializable data object RoomInfo
 }

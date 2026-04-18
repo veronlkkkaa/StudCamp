@@ -64,9 +64,9 @@ fun RegisterScreen(
                     UserStore.login(
                         User(
                             id = UUID.randomUUID().toString(),
+                            login = username.trim().removePrefix("@"),
                             firstName = firstName.trim(),
                             lastName = lastName.trim(),
-                            username = username.trim().removePrefix("@"),
                             phone = phone.trim()
                         )
                     )

@@ -1,6 +1,11 @@
 package com.example.studcampapp.ui.navigation
 
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -9,6 +14,7 @@ import com.example.studcampapp.ui.feature.auth.AuthScreen
 import com.example.studcampapp.ui.feature.auth.RegisterScreen
 import com.example.studcampapp.ui.feature.chat.ChatListScreen
 import com.example.studcampapp.ui.feature.chat.ChatScreen
+import com.example.studcampapp.ui.feature.chat.RoomInfoScreen
 import com.example.studcampapp.ui.feature.profile.EditProfileScreen
 import com.example.studcampapp.ui.feature.profile.ProfileScreen
 import com.example.studcampapp.ui.feature.room.CreateRoomScreen
@@ -19,8 +25,14 @@ import com.example.studcampapp.ui.feature.start.StartScreen
 @Composable
 fun NavGraph() {
     val navController = rememberNavController()
+    val focusManager = LocalFocusManager.current
 
     NavHost(
+        modifier = Modifier
+            .fillMaxSize()
+            .pointerInput(Unit) {
+                detectTapGestures(onTap = { focusManager.clearFocus() })
+            },
         navController = navController,
         startDestination = Route.Start
     ) {
@@ -63,7 +75,14 @@ fun NavGraph() {
         }
 
         composable<Route.Chat> {
-            ChatScreen(onLeave = { navController.popBackStack() })
+            ChatScreen(
+                onLeave    = { navController.popBackStack() },
+                onRoomInfo = { navController.navigate(Route.RoomInfo) }
+            )
+        }
+
+        composable<Route.RoomInfo> {
+            RoomInfoScreen(onBack = { navController.popBackStack() })
         }
 
         composable<Route.Profile> {
