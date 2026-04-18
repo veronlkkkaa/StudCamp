@@ -77,6 +77,7 @@ fun ChatScreen(onLeave: () -> Unit, onRoomInfo: () -> Unit) {
 
     BackHandler(enabled = pickerActive) { pickerActive = false }
     val uploadProgress = remember { mutableStateMapOf<Int, Float>() }
+    val downloadProgress = remember { mutableStateMapOf<Int, Float>() }
     val listState = rememberLazyListState()
 
     val filePickerLauncher = rememberLauncherForActivityResult(
@@ -260,7 +261,23 @@ fun ChatScreen(onLeave: () -> Unit, onRoomInfo: () -> Unit) {
                 MessageBubble(
                     message = message,
                     uploadProgress = uploadProgress[message.id],
-                    onLongPress = { readReceiptMessage = message }
+                    downloadProgress = downloadProgress[message.id],
+                    onLongPress = { readReceiptMessage = message },
+                    onDownload = {
+                        val id = message.id
+                        if (downloadProgress[id] == null) {
+                            coroutineScope.launch {
+                                downloadProgress[id] = 0f
+                                val steps = 40
+                                repeat(steps) { i ->
+                                    delay(60L)
+                                    downloadProgress[id] = (i + 1).toFloat() / steps
+                                }
+                                delay(200)
+                                downloadProgress.remove(id)
+                            }
+                        }
+                    }
                 )
             }
         }
@@ -355,7 +372,9 @@ fun ChatScreen(onLeave: () -> Unit, onRoomInfo: () -> Unit) {
 fun MessageBubble(
     message: ChatMessage,
     uploadProgress: Float? = null,
-    onLongPress: () -> Unit = {}
+    downloadProgress: Float? = null,
+    onLongPress: () -> Unit = {},
+    onDownload: () -> Unit = {}
 ) {
     val isMe = message.author == "Я"
     Row(
@@ -389,7 +408,12 @@ fun MessageBubble(
 
             val attachment = message.attachment
             if (attachment != null) {
-                AttachmentView(attachment = attachment, isMe = isMe)
+                AttachmentView(
+                    attachment = attachment,
+                    isMe = isMe,
+                    downloadProgress = downloadProgress,
+                    onDownload = onDownload
+                )
                 if (message.text.isNotBlank()) Spacer(Modifier.height(4.dp))
             }
 
@@ -442,63 +466,96 @@ fun MessageBubble(
 }
 
 @Composable
-private fun AttachmentView(attachment: MessageAttachment, isMe: Boolean) {
+private fun AttachmentView(
+    attachment: MessageAttachment,
+    isMe: Boolean,
+    downloadProgress: Float? = null,
+    onDownload: () -> Unit = {}
+) {
     val overlayBg = if (isMe) Color.White.copy(alpha = 0.15f) else Purple.copy(alpha = 0.08f)
     val iconTint = if (isMe) Color.White else Purple
     val textColor = if (isMe) Color.White else Color(0xFF1A1A1A)
 
     when (attachment.type) {
         AttachmentType.Image -> {
-            AsyncImage(
-                model = attachment.uri,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(160.dp)
-                    .clip(RoundedCornerShape(8.dp))
-            )
-        }
-        AttachmentType.Video -> {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(overlayBg)
-                    .padding(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(Icons.Default.PlayArrow, null, tint = iconTint, modifier = Modifier.size(32.dp))
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    text = attachment.fileName,
-                    fontSize = 13.sp,
-                    fontFamily = InterFontFamily,
-                    color = textColor,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
+            Box {
+                AsyncImage(
+                    model = attachment.uri,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(160.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                )
+                IconButton(
+                    onClick = onDownload,
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(4.dp)
+                        .size(32.dp)
+                ) {
+                    Icon(
+                        if (downloadProgress != null) Icons.Default.Downloading else Icons.Default.Download,
+                        contentDescription = "Скачать",
+                        tint = Color.White,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+            if (downloadProgress != null) {
+                LinearProgressIndicator(
+                    progress = { downloadProgress },
+                    modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
+                    color = iconTint,
+                    trackColor = iconTint.copy(alpha = 0.2f)
                 )
             }
         }
-        AttachmentType.Document -> {
-            Row(
+        AttachmentType.Video, AttachmentType.Document -> {
+            val icon = if (attachment.type == AttachmentType.Video) Icons.Default.PlayArrow else Icons.Default.Description
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(8.dp))
                     .background(overlayBg)
-                    .padding(8.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(8.dp)
             ) {
-                Icon(Icons.Default.Description, null, tint = iconTint, modifier = Modifier.size(32.dp))
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    text = attachment.fileName,
-                    fontSize = 13.sp,
-                    fontFamily = InterFontFamily,
-                    color = textColor,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(icon, null, tint = iconTint, modifier = Modifier.size(32.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = attachment.fileName,
+                        fontSize = 13.sp,
+                        fontFamily = InterFontFamily,
+                        color = textColor,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    IconButton(
+                        onClick = onDownload,
+                        modifier = Modifier.size(32.dp),
+                        enabled = downloadProgress == null
+                    ) {
+                        Icon(
+                            if (downloadProgress != null) Icons.Default.Downloading else Icons.Default.Download,
+                            contentDescription = "Скачать",
+                            tint = iconTint,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+                if (downloadProgress != null) {
+                    Spacer(Modifier.height(4.dp))
+                    LinearProgressIndicator(
+                        progress = { downloadProgress },
+                        modifier = Modifier.fillMaxWidth(),
+                        color = iconTint,
+                        trackColor = iconTint.copy(alpha = 0.2f)
+                    )
+                }
             }
         }
     }
