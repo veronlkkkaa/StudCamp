@@ -1,9 +1,9 @@
 package com.example.studcampapp.backend.server
 
 import com.example.studcampapp.backend.session.SessionStore
-import com.example.studcampapp.model.dto.JoinResponse
-import com.example.studcampapp.model.ws.WsClientEvent
-import com.example.studcampapp.model.ws.WsServerEvent
+import com.example.studcampapp.network.dto.JoinResponse
+import com.example.studcampapp.network.ws.WsClientEvent
+import com.example.studcampapp.network.ws.WsServerEvent
 import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.client.plugins.websocket.webSocketSession
 import io.ktor.client.request.post

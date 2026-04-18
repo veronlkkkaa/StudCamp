@@ -1,9 +1,9 @@
 package com.example.studcampapp.backend.server
 
 import com.example.studcampapp.backend.session.SessionStore
-import com.example.studcampapp.model.ws.WsClientEvent
-import com.example.studcampapp.model.ws.WsServerEvent
-import com.example.studcampapp.model.dto.JoinRequest
+import com.example.studcampapp.network.ws.WsClientEvent
+import com.example.studcampapp.network.ws.WsServerEvent
+import com.example.studcampapp.network.dto.JoinRequest
 import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
