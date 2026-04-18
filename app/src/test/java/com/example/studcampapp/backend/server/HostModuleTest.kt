@@ -1,7 +1,7 @@
 package com.example.studcampapp.backend.server
 
 import com.example.studcampapp.backend.session.SessionStore
-import com.example.studcampapp.model.dto.JoinResponse
+import com.example.studcampapp.network.dto.JoinResponse
 import io.ktor.client.request.get
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody

@@ -5,29 +5,33 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 
 @Composable
 fun AppTheme(
-    darkTheme: Boolean = true,
+    darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit
 ) {
-    val colors = if (darkTheme) {
+    val appColors = if (darkTheme) DarkAppColors else LightAppColors
+    val colorScheme = if (darkTheme) {
         darkColorScheme(
             primary = Purple,
-            background = DarkBackground,
-            surface = DarkSurface,
+            background = appColors.background,
+            surface = appColors.surface,
         )
     } else {
         lightColorScheme(
             primary = Purple,
-            background = LightBackground,
-            surface = LightSurface,
+            background = appColors.background,
+            surface = appColors.surface,
         )
     }
 
-    MaterialTheme(
-        colorScheme = colors,
-        typography = Typography,
-        content = content
-    )
+    CompositionLocalProvider(LocalAppColors provides appColors) {
+        MaterialTheme(
+            colorScheme = colorScheme,
+            typography = Typography,
+            content = content
+        )
+    }
 }
