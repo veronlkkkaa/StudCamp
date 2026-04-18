@@ -60,6 +60,7 @@ dependencies {
     implementation(libs.ktor.server.websockets)
     testImplementation(libs.junit)
     testImplementation(libs.ktor.server.testhost)
+    testImplementation(libs.ktor.client.websockets)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
