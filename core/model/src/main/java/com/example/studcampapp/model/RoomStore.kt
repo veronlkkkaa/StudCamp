@@ -23,15 +23,13 @@ object RoomStore {
     var currentRoom by mutableStateOf(
         RoomInfo(
             name = "Общий чат",
-            creatorId = "1",
-            creatorName = "Алексей М.",
-            participants = listOf(
-                RoomParticipant("1", "Алексей М.", false),
-                RoomParticipant("2", "Мария С.", false),
-                RoomParticipant("3", "Гость 3", true),
-                RoomParticipant("4", "Гость 4", true),
-                RoomParticipant("5", "Дмитрий К.", false),
-            )
+            creatorId = "",
+            creatorName = "",
+            participants = emptyList()
         )
     )
+
+    fun setRoomName(name: String) {
+        currentRoom = currentRoom.copy(name = name)
+    }
 }
