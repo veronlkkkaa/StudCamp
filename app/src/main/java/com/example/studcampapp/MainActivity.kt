@@ -13,7 +13,7 @@ import com.example.studcampapp.ui.theme.AppTheme
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        HostRuntime.start()
+        HostRuntime.start(cacheDir)
         RoomHistoryStore.init(this)
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.dark(0x662D1B69)
