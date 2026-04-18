@@ -34,7 +34,9 @@ data class ChatMessage(
     val status: MessageStatus = MessageStatus.Sent,
     val readBy: List<String> = emptyList(),
     val fileInfo: FileInfo? = null,
-    @kotlinx.serialization.Transient val attachment: MessageAttachment? = null
+    @kotlinx.serialization.Transient val attachment: MessageAttachment? = null,
+    @kotlinx.serialization.Transient val isSystem: Boolean = false,
+    @kotlinx.serialization.Transient val isPending: Boolean = false
 ) {
     val author: String get() = user.login
 }

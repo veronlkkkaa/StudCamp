@@ -9,6 +9,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.example.studcampapp.model.ChatClient
 import com.example.studcampapp.navigation.Route
 import com.example.studcampapp.ui.feature.auth.AuthScreen
 import com.example.studcampapp.ui.feature.auth.RegisterScreen
@@ -68,15 +69,18 @@ fun NavGraph() {
 
         composable<Route.ChatList> {
             ChatListScreen(
-                onRoomClick    = { navController.navigate(Route.Chat) },
-                onCreateRoom   = { navController.navigate(Route.RoomOptions) },
-                onProfileClick = { navController.navigate(Route.Profile) }
+                onRoomConnected = { navController.navigate(Route.Chat) },
+                onCreateRoom    = { navController.navigate(Route.RoomOptions) },
+                onProfileClick  = { navController.navigate(Route.Profile) }
             )
         }
 
         composable<Route.Chat> {
             ChatScreen(
-                onLeave    = { navController.popBackStack() },
+                onLeave    = {
+                    ChatClient.disconnect()
+                    navController.popBackStack()
+                },
                 onRoomInfo = { navController.navigate(Route.RoomInfo) }
             )
         }

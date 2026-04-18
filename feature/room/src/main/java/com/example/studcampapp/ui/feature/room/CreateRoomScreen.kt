@@ -14,14 +14,24 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.studcampapp.model.ChatClient
+import com.example.studcampapp.model.RoomHistoryStore
+import com.example.studcampapp.model.RoomStore
+import com.example.studcampapp.model.SavedRoom
+import com.example.studcampapp.model.UserStore
 import com.example.studcampapp.ui.theme.*
+import kotlinx.coroutines.launch
 
 @Composable
 fun CreateRoomScreen(
     onBack: () -> Unit,
-    onRoomCreated: (roomCode: String) -> Unit
+    onRoomCreated: () -> Unit
 ) {
     var roomName by remember { mutableStateOf("") }
+    var nickname by remember { mutableStateOf(UserStore.currentUser?.login ?: "") }
+    var isLoading by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
 
     Box(
         modifier = Modifier
@@ -46,7 +56,7 @@ fun CreateRoomScreen(
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = "Придумай название для комнаты",
+                text = "Придумай название и свой ник",
                 fontSize = 14.sp,
                 fontFamily = InterFontFamily,
                 color = TextSecondary
@@ -56,7 +66,7 @@ fun CreateRoomScreen(
 
             OutlinedTextField(
                 value = roomName,
-                onValueChange = { roomName = it },
+                onValueChange = { roomName = it; error = null },
                 label = {
                     Text("Название комнаты", fontFamily = InterFontFamily, color = TextSecondary)
                 },
@@ -72,14 +82,68 @@ fun CreateRoomScreen(
                 singleLine = true
             )
 
+            Spacer(modifier = Modifier.height(16.dp))
+
+            OutlinedTextField(
+                value = nickname,
+                onValueChange = { nickname = it; error = null },
+                label = {
+                    Text("Твой ник", fontFamily = InterFontFamily, color = TextSecondary)
+                },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = Purple,
+                    unfocusedBorderColor = Purple.copy(alpha = 0.4f),
+                    focusedTextColor = TextPrimary,
+                    unfocusedTextColor = TextPrimary,
+                    cursorColor = Wisteria
+                ),
+                singleLine = true
+            )
+
+            if (error != null) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = error!!,
+                    color = MaterialTheme.colorScheme.error,
+                    fontSize = 13.sp,
+                    fontFamily = InterFontFamily
+                )
+            }
+
             Spacer(modifier = Modifier.height(24.dp))
 
             Button(
                 onClick = {
-                    if (roomName.isNotBlank()) {
-                        onRoomCreated(roomName.trim())
+                    if (roomName.isBlank() || nickname.isBlank()) return@Button
+                    isLoading = true
+                    error = null
+                    scope.launch {
+                        ChatClient.join("127.0.0.1", 8080, nickname.trim())
+                            .onSuccess {
+                                val name = roomName.trim()
+                                RoomStore.setRoomName(name)
+                                RoomHistoryStore.saveRoom(
+                                    SavedRoom(
+                                        id = "127.0.0.1:8080",
+                                        name = name,
+                                        serverIp = "127.0.0.1",
+                                        serverPort = 8080,
+                                        myNickname = nickname.trim(),
+                                        lastVisited = System.currentTimeMillis()
+                                    )
+                                )
+                                ChatClient.connect()
+                                onRoomCreated()
+                            }
+                            .onFailure { e ->
+                                error = "Ошибка запуска: ${e.message}"
+                            }
+                        isLoading = false
                     }
                 },
+                enabled = !isLoading && roomName.isNotBlank() && nickname.isNotBlank(),
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
@@ -96,13 +160,17 @@ fun CreateRoomScreen(
                         ),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        "Создать",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = InterFontFamily,
-                        color = TextPrimary
-                    )
+                    if (isLoading) {
+                        CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+                    } else {
+                        Text(
+                            "Создать",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = InterFontFamily,
+                            color = TextPrimary
+                        )
+                    }
                 }
             }
         }
