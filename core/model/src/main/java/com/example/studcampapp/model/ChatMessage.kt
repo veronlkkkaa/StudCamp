@@ -1,0 +1,42 @@
+package com.example.studcampapp.model
+
+import kotlinx.serialization.KSerializer
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
+import java.time.LocalDateTime
+
+private object LocalDateTimeSerializer : KSerializer<LocalDateTime> {
+    override val descriptor = PrimitiveSerialDescriptor("LocalDateTime", PrimitiveKind.STRING)
+    override fun serialize(encoder: Encoder, value: LocalDateTime) = encoder.encodeString(value.toString())
+    override fun deserialize(decoder: Decoder): LocalDateTime = LocalDateTime.parse(decoder.decodeString())
+}
+
+@Serializable
+enum class MessageStatus { Sending, Sent, Read }
+
+enum class AttachmentType { Image, Video, Document, Audio }
+
+data class MessageAttachment(
+    val uri: android.net.Uri,
+    val type: AttachmentType,
+    val fileName: String
+)
+
+@Serializable
+data class ChatMessage(
+    val id: Int,
+    val user: User,
+    val text: String,
+    @Serializable(with = LocalDateTimeSerializer::class) val time: LocalDateTime,
+    val status: MessageStatus = MessageStatus.Sent,
+    val readBy: List<String> = emptyList(),
+    val fileInfo: FileInfo? = null,
+    @kotlinx.serialization.Transient val attachment: MessageAttachment? = null,
+    @kotlinx.serialization.Transient val isSystem: Boolean = false,
+    @kotlinx.serialization.Transient val isPending: Boolean = false
+) {
+    val author: String get() = user.login
+}
