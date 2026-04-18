@@ -68,6 +68,20 @@ class SessionStore {
         message
     }
 
+    suspend fun addFileMessage(sessionId: String, fileId: String): ChatMessage? {
+        val fileInfo = FileInfo(
+            id = fileId,
+            fileName = fileId,
+            size = 0,
+            fileUrl = "/files/$fileId"
+        )
+        return addMessage(
+            sessionId = sessionId,
+            text = "Shared file: $fileId",
+            fileInfo = fileInfo
+        )
+    }
+
     suspend fun leave(sessionId: String): User? = mutex.withLock {
         val userId = sessionsById.remove(sessionId) ?: return@withLock null
         val hasOtherSessions = sessionsById.values.any { it == userId }
