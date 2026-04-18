@@ -84,6 +84,55 @@ class HostWebSocketTest {
         wsA.close()
     }
 
+    @Test
+    fun ws_ping_returnsPong() = testApplication {
+        application {
+            hostModule(SessionStore())
+        }
+
+        val session = join("alice")
+        val wsClient = createClient {
+            install(WebSockets)
+        }
+        val ws = wsClient.webSocketSession("/ws?sessionId=${session.sessionId}")
+
+        ws.send(Frame.Text(json.encodeToString(WsClientEvent.serializer(), WsClientEvent.Ping)))
+        val pong = readUntilPong(ws)
+
+        assertNotNull(pong)
+        ws.close()
+    }
+
+    @Test
+    fun ws_sendFile_broadcastsFileShared() = testApplication {
+        application {
+            hostModule(SessionStore())
+        }
+
+        val sessionA = join("alice")
+        val sessionB = join("bob")
+
+        val wsClient = createClient {
+            install(WebSockets)
+        }
+
+        val wsA = wsClient.webSocketSession("/ws?sessionId=${sessionA.sessionId}")
+        val wsB = wsClient.webSocketSession("/ws?sessionId=${sessionB.sessionId}")
+
+        wsA.send(Frame.Text(json.encodeToString(WsClientEvent.serializer(), WsClientEvent.SendFile("file-123"))))
+
+        val fileEventA = readUntilFileShared(wsA)
+        val fileEventB = readUntilFileShared(wsB)
+
+        assertNotNull(fileEventA)
+        assertNotNull(fileEventB)
+        assertEquals("file-123", fileEventA?.file?.id)
+        assertEquals("file-123", fileEventB?.file?.id)
+
+        wsA.close()
+        wsB.close()
+    }
+
     private suspend fun io.ktor.server.testing.ApplicationTestBuilder.join(login: String): JoinResponse {
         val response = client.post("/join") {
             contentType(ContentType.Application.Json)
@@ -140,6 +189,46 @@ class HostWebSocketTest {
                 }.getOrNull() ?: continue
 
                 if (event is WsServerEvent.UserLeft) {
+                    found = event
+                }
+            }
+            found
+        }
+    }
+
+    private suspend fun readUntilPong(
+        session: io.ktor.client.plugins.websocket.DefaultClientWebSocketSession
+    ): WsServerEvent.Pong? {
+        return withTimeout(5_000) {
+            var found: WsServerEvent.Pong? = null
+            while (found == null) {
+                val frame = session.incoming.receive()
+                if (frame !is Frame.Text) continue
+                val event = runCatching {
+                    json.decodeFromString(WsServerEvent.serializer(), frame.readText())
+                }.getOrNull() ?: continue
+
+                if (event is WsServerEvent.Pong) {
+                    found = event
+                }
+            }
+            found
+        }
+    }
+
+    private suspend fun readUntilFileShared(
+        session: io.ktor.client.plugins.websocket.DefaultClientWebSocketSession
+    ): WsServerEvent.FileShared? {
+        return withTimeout(5_000) {
+            var found: WsServerEvent.FileShared? = null
+            while (found == null) {
+                val frame = session.incoming.receive()
+                if (frame !is Frame.Text) continue
+                val event = runCatching {
+                    json.decodeFromString(WsServerEvent.serializer(), frame.readText())
+                }.getOrNull() ?: continue
+
+                if (event is WsServerEvent.FileShared) {
                     found = event
                 }
             }

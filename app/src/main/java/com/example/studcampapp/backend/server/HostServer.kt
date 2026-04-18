@@ -175,14 +175,24 @@ private fun Route.wsRoute(
                     }
 
                     is WsClientEvent.SendFile -> {
-                        connectionRegistry.sendTo(
-                            sessionId,
-                            WsServerEvent.Error(
-                                "FILE_NOT_READY",
-                                "Upload API is not connected to WebSocket flow yet"
-                            ),
-                            wsJson
+                        val message = sessionStore.addFileMessage(
+                            sessionId = sessionId,
+                            fileId = clientEvent.fileId
                         )
+                        if (message == null) {
+                            connectionRegistry.sendTo(
+                                sessionId,
+                                WsServerEvent.Error("INVALID_SESSION", "session is not active"),
+                                wsJson
+                            )
+                            continue
+                        }
+
+                        val fileInfo = message.fileInfo
+                        if (fileInfo != null) {
+                            connectionRegistry.broadcast(WsServerEvent.FileShared(fileInfo), wsJson)
+                        }
+                        connectionRegistry.broadcast(WsServerEvent.NewMessage(message), wsJson)
                     }
                 }
             }
