@@ -5,10 +5,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.example.studcampapp.backend.server.HostForegroundService
+import com.example.studcampapp.backend.server.HostRuntime
 import com.example.studcampapp.data.repository.impl.ChatRepositoryImpl
 import com.example.studcampapp.feature.auth.ui.AuthScreen
 import com.example.studcampapp.feature.auth.ui.RegisterScreen
@@ -27,6 +30,7 @@ import com.example.studcampapp.navigation.Route
 fun NavGraph() {
     val navController = rememberNavController()
     val focusManager = LocalFocusManager.current
+    val context = LocalContext.current
 
     NavHost(
         modifier = Modifier
@@ -79,6 +83,9 @@ fun NavGraph() {
             ChatScreen(
                 onLeave    = {
                     ChatRepositoryImpl.disconnect()
+                    if (HostRuntime.isRunning()) {
+                        HostForegroundService.stop(context)
+                    }
                     navController.popBackStack()
                 },
                 onRoomInfo = { navController.navigate(Route.RoomInfo) }
@@ -117,7 +124,10 @@ fun NavGraph() {
         composable<Route.CreateRoom> {
             CreateRoomScreen(
                 onBack        = { navController.popBackStack() },
-                onRoomCreated = { navController.navigate(Route.Chat) }
+                onRoomCreated = { navController.navigate(Route.Chat) },
+                onStartHost = { roomName ->
+                    HostForegroundService.start(context, roomName)
+                }
             )
         }
 
