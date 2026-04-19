@@ -23,6 +23,7 @@ import com.example.studcampapp.ui.theme.*
 fun CreateRoomScreen(
     onBack: () -> Unit,
     onRoomCreated: () -> Unit,
+    onStartHost: (String) -> Unit = {},
     viewModel: RoomViewModel = viewModel()
 ) {
     val appColors = LocalAppColors.current
@@ -120,7 +121,10 @@ fun CreateRoomScreen(
             Button(
                 onClick = {
                     if (roomName.isBlank() || nickname.isBlank()) return@Button
-                    viewModel.join("127.0.0.1", 8080, nickname.trim(), roomName.trim())
+                    val safeRoomName = roomName.trim()
+                    val safeNickname = nickname.trim()
+                    onStartHost(safeRoomName)
+                    viewModel.join("127.0.0.1", 8080, safeNickname, safeRoomName)
                 },
                 enabled = !viewModel.isLoading && roomName.isNotBlank() && nickname.isNotBlank(),
                 modifier = Modifier
