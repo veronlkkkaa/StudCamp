@@ -166,4 +166,3 @@ class HostModuleTest {
         assertEquals(HttpStatusCode.NotFound, response.status)
     }
 }
-
