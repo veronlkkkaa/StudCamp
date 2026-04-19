@@ -1,5 +1,6 @@
 package com.example.studcampapp.backend.session
 
+import android.annotation.SuppressLint
 import com.example.studcampapp.model.ChatMessage
 import com.example.studcampapp.model.FileInfo
 import com.example.studcampapp.model.RoomState
@@ -58,6 +59,7 @@ class SessionStore {
         roomStateUnsafe()
     }
 
+    @SuppressLint("NewApi")
     suspend fun addMessage(sessionId: String, text: String, fileInfo: FileInfo? = null): ChatMessage? = mutex.withLock {
         val userId = sessionsById[sessionId] ?: return@withLock null
         val user = usersById[userId] ?: return@withLock null
@@ -76,20 +78,6 @@ class SessionStore {
         message
     }
 
-    suspend fun addFileMessage(sessionId: String, fileId: String): ChatMessage? {
-        val fileInfo = FileInfo(
-            id = fileId,
-            fileName = fileId,
-            size = 0,
-            fileUrl = "/files/$fileId"
-        )
-        return addMessage(
-            sessionId = sessionId,
-            text = "Shared file: $fileId",
-            fileInfo = fileInfo
-        )
-    }
-
     suspend fun leave(sessionId: String): User? = mutex.withLock {
         val userId = sessionsById.remove(sessionId) ?: return@withLock null
         val hasOtherSessions = sessionsById.values.any { it == userId }
@@ -97,6 +85,13 @@ class SessionStore {
             return@withLock null
         }
         usersById.remove(userId)
+    }
+
+    suspend fun clear() = mutex.withLock {
+        usersById.clear()
+        sessionsById.clear()
+        messages.clear()
+        nextMessageId = 1
     }
 
     private fun roomStateUnsafe(): RoomState {

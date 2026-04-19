@@ -1,15 +1,20 @@
 package com.example.studcampapp.backend.server
 
 import com.example.studcampapp.backend.session.SessionStore
-import com.example.studcampapp.network.dto.JoinResponse
-import com.example.studcampapp.network.ws.WsClientEvent
-import com.example.studcampapp.network.ws.WsServerEvent
+import com.example.studcampapp.model.dto.JoinResponse
+import com.example.studcampapp.model.dto.UploadResponse
+import com.example.studcampapp.model.ws.WsClientEvent
+import com.example.studcampapp.model.ws.WsServerEvent
 import io.ktor.client.plugins.websocket.WebSockets
+import io.ktor.client.request.forms.MultiPartFormDataContent
+import io.ktor.client.request.forms.formData
 import io.ktor.client.plugins.websocket.webSocketSession
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
+import io.ktor.http.Headers
+import io.ktor.http.HttpHeaders
 import io.ktor.http.contentType
 import io.ktor.server.testing.testApplication
 import io.ktor.websocket.Frame
@@ -111,6 +116,7 @@ class HostWebSocketTest {
 
         val sessionA = join("alice")
         val sessionB = join("bob")
+        val uploaded = uploadFile(sessionA.sessionId)
 
         val wsClient = createClient {
             install(WebSockets)
@@ -119,15 +125,22 @@ class HostWebSocketTest {
         val wsA = wsClient.webSocketSession("/ws?sessionId=${sessionA.sessionId}")
         val wsB = wsClient.webSocketSession("/ws?sessionId=${sessionB.sessionId}")
 
-        wsA.send(Frame.Text(json.encodeToString(WsClientEvent.serializer(), WsClientEvent.SendFile("file-123"))))
+        wsA.send(
+            Frame.Text(
+                json.encodeToString(
+                    WsClientEvent.serializer(),
+                    WsClientEvent.SendFile(uploaded.fileInfo.id)
+                )
+            )
+        )
 
         val fileEventA = readUntilFileShared(wsA)
         val fileEventB = readUntilFileShared(wsB)
 
         assertNotNull(fileEventA)
         assertNotNull(fileEventB)
-        assertEquals("file-123", fileEventA?.file?.id)
-        assertEquals("file-123", fileEventB?.file?.id)
+        assertEquals(uploaded.fileInfo.id, fileEventA?.file?.id)
+        assertEquals(uploaded.fileInfo.id, fileEventB?.file?.id)
 
         wsA.close()
         wsB.close()
@@ -148,6 +161,30 @@ class HostWebSocketTest {
                   "email": null
                 }
                 """.trimIndent()
+            )
+        }
+
+        return runBlocking {
+            json.decodeFromString(response.bodyAsText())
+        }
+    }
+
+    private suspend fun io.ktor.server.testing.ApplicationTestBuilder.uploadFile(sessionId: String): UploadResponse {
+        val response = client.post("/files/upload") {
+            headers.append(HttpHeaders.Authorization, "Session $sessionId")
+            setBody(
+                MultiPartFormDataContent(
+                    formData {
+                        append(
+                            key = "file",
+                            value = "ws-file".toByteArray(),
+                            headers = Headers.build {
+                                append(HttpHeaders.ContentDisposition, "form-data; name=\"file\"; filename=\"ws.txt\"")
+                                append(HttpHeaders.ContentType, ContentType.Text.Plain.toString())
+                            }
+                        )
+                    }
+                )
             )
         }
 

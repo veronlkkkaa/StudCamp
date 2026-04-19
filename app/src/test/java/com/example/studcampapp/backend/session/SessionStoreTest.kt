@@ -70,5 +70,29 @@ class SessionStoreTest {
         assertEquals(2, state.messages.first().id)
         assertEquals(501, state.messages.last().id)
     }
+
+    @Test
+    fun clear_removesAllSessionsUsersAndMessages() = runBlocking {
+        val store = SessionStore()
+        val joinResponse = store.join(
+            JoinRequest(
+                login = "clear_test",
+                firstName = null,
+                lastName = null,
+                middleName = null,
+                avatarUrl = null,
+                phone = null,
+                email = null
+            )
+        )
+        store.addMessage(joinResponse.sessionId, "msg")
+
+        store.clear()
+
+        assertNull(store.getUserIdBySessionId(joinResponse.sessionId))
+        val state = store.getRoomState()
+        assertEquals(0, state.users.size)
+        assertEquals(0, state.messages.size)
+    }
 }
 
