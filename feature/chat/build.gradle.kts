@@ -18,9 +18,12 @@ android {
 
 dependencies {
     implementation(project(":core:model"))
+    implementation(project(":core:network"))
+    implementation(project(":core:data"))
     implementation(project(":core:ui"))
     implementation(project(":core:navigation"))
     implementation(libs.androidx.navigation.compose)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.coil.compose)
     implementation(libs.androidx.activity.compose)
 }

@@ -22,6 +22,8 @@ dependencyResolutionManagement {
 rootProject.name = "StudcampApp"
 include(":app")
 include(":core:model")
+include(":core:network")
+include(":core:data")
 include(":core:ui")
 include(":core:navigation")
 include(":feature:auth")

@@ -9,19 +9,19 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.example.studcampapp.model.ChatClient
+import com.example.studcampapp.data.repository.impl.ChatRepositoryImpl
+import com.example.studcampapp.feature.auth.ui.AuthScreen
+import com.example.studcampapp.feature.auth.ui.RegisterScreen
+import com.example.studcampapp.feature.auth.ui.StartScreen
+import com.example.studcampapp.feature.chat.ui.ChatListScreen
+import com.example.studcampapp.feature.chat.ui.ChatScreen
+import com.example.studcampapp.feature.chat.ui.RoomInfoScreen
+import com.example.studcampapp.feature.profile.ui.EditProfileScreen
+import com.example.studcampapp.feature.profile.ui.ProfileScreen
+import com.example.studcampapp.feature.room.ui.CreateRoomScreen
+import com.example.studcampapp.feature.room.ui.JoinRoomScreen
+import com.example.studcampapp.feature.room.ui.RoomOptionsScreen
 import com.example.studcampapp.navigation.Route
-import com.example.studcampapp.ui.feature.auth.AuthScreen
-import com.example.studcampapp.ui.feature.auth.RegisterScreen
-import com.example.studcampapp.ui.feature.chat.ChatListScreen
-import com.example.studcampapp.ui.feature.chat.ChatScreen
-import com.example.studcampapp.ui.feature.chat.RoomInfoScreen
-import com.example.studcampapp.ui.feature.profile.EditProfileScreen
-import com.example.studcampapp.ui.feature.profile.ProfileScreen
-import com.example.studcampapp.ui.feature.room.CreateRoomScreen
-import com.example.studcampapp.ui.feature.room.JoinRoomScreen
-import com.example.studcampapp.ui.feature.room.RoomOptionsScreen
-import com.example.studcampapp.ui.feature.start.StartScreen
 
 @Composable
 fun NavGraph() {
@@ -78,7 +78,7 @@ fun NavGraph() {
         composable<Route.Chat> {
             ChatScreen(
                 onLeave    = {
-                    ChatClient.disconnect()
+                    ChatRepositoryImpl.disconnect()
                     navController.popBackStack()
                 },
                 onRoomInfo = { navController.navigate(Route.RoomInfo) }

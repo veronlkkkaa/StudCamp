@@ -5,8 +5,8 @@ import com.example.studcampapp.model.ChatMessage
 import com.example.studcampapp.model.FileInfo
 import com.example.studcampapp.model.RoomState
 import com.example.studcampapp.model.User
-import com.example.studcampapp.model.dto.JoinRequest
-import com.example.studcampapp.model.dto.JoinResponse
+import com.example.studcampapp.network.dto.JoinRequest
+import com.example.studcampapp.network.dto.JoinResponse
 import java.time.LocalDateTime
 import java.util.UUID
 import kotlinx.coroutines.sync.Mutex

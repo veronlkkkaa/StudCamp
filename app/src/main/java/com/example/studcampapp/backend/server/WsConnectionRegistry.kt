@@ -1,6 +1,6 @@
 package com.example.studcampapp.backend.server
 
-import com.example.studcampapp.model.ws.WsServerEvent
+import com.example.studcampapp.network.ws.WsServerEvent
 import io.ktor.server.websocket.WebSocketServerSession
 import io.ktor.websocket.CloseReason
 import io.ktor.websocket.Frame
