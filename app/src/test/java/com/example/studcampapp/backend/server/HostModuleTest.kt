@@ -165,4 +165,55 @@ class HostModuleTest {
         val response = client.get("/files/missing")
         assertEquals(HttpStatusCode.NotFound, response.status)
     }
+
+    @Test
+    fun auth_registerAndLogin_withSameNickname_reusesUserId() = testApplication {
+        application {
+            hostModule(SessionStore())
+        }
+
+        val registerResponse = client.post("/auth/register") {
+            contentType(ContentType.Application.Json)
+            setBody(
+                """
+                {
+                  "login": "auth_user",
+                  "firstName": "Auth",
+                  "lastName": null,
+                  "middleName": null,
+                  "avatarUrl": null,
+                  "phone": null,
+                  "email": null
+                }
+                """.trimIndent()
+            )
+        }
+
+        val loginResponse = client.post("/auth/login") {
+            contentType(ContentType.Application.Json)
+            setBody(
+                """
+                {
+                  "login": "auth_user",
+                  "firstName": "AuthUpdated",
+                  "lastName": null,
+                  "middleName": null,
+                  "avatarUrl": null,
+                  "phone": null,
+                  "email": null
+                }
+                """.trimIndent()
+            )
+        }
+
+        assertEquals(HttpStatusCode.OK, registerResponse.status)
+        assertEquals(HttpStatusCode.OK, loginResponse.status)
+
+        val registered = runBlocking { json.decodeFromString<JoinResponse>(registerResponse.bodyAsText()) }
+        val loggedIn = runBlocking { json.decodeFromString<JoinResponse>(loginResponse.bodyAsText()) }
+
+        assertEquals(registered.user.id, loggedIn.user.id)
+        assertTrue(registered.sessionId != loggedIn.sessionId)
+        assertEquals("AuthUpdated", loggedIn.user.firstName)
+    }
 }

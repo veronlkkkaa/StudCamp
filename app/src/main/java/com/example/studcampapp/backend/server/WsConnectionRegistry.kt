@@ -10,12 +10,17 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
 
 class WsConnectionRegistry {
-    private val mutex = Mutex()
-    private val sessions = LinkedHashMap<String, WebSocketServerSession>()
+    private data class Connection(
+        val userId: String,
+        val session: WebSocketServerSession
+    )
 
-    suspend fun register(sessionId: String, session: WebSocketServerSession) {
+    private val mutex = Mutex()
+    private val sessions = LinkedHashMap<String, Connection>()
+
+    suspend fun register(sessionId: String, userId: String, session: WebSocketServerSession) {
         mutex.withLock {
-            sessions[sessionId] = session
+            sessions[sessionId] = Connection(userId = userId, session = session)
         }
     }
 
@@ -27,9 +32,9 @@ class WsConnectionRegistry {
 
     suspend fun sendTo(sessionId: String, event: WsServerEvent, json: Json) {
         val payload = json.encodeToString(WsServerEvent.serializer(), event)
-        val session = mutex.withLock { sessions[sessionId] } ?: return
+        val connection = mutex.withLock { sessions[sessionId] } ?: return
         val sent = runCatching {
-            session.send(Frame.Text(payload))
+            connection.session.send(Frame.Text(payload))
         }.isSuccess
         if (!sent) {
             unregister(sessionId)
@@ -39,9 +44,9 @@ class WsConnectionRegistry {
     suspend fun broadcast(event: WsServerEvent, json: Json) {
         val payload = json.encodeToString(WsServerEvent.serializer(), event)
         val snapshot = mutex.withLock { sessions.toMap() }
-        snapshot.forEach { (sessionId, session) ->
+        snapshot.forEach { (sessionId, connection) ->
             val sent = runCatching {
-                session.send(Frame.Text(payload))
+                connection.session.send(Frame.Text(payload))
             }.isSuccess
             if (!sent) {
                 unregister(sessionId)
@@ -51,11 +56,9 @@ class WsConnectionRegistry {
 
     suspend fun closeAll(reason: CloseReason) {
         val snapshot = mutex.withLock { sessions.toMap() }
-        snapshot.forEach { (sessionId, session) ->
-            runCatching { session.close(reason) }
+        snapshot.forEach { (sessionId, connection) ->
+            runCatching { connection.session.close(reason) }
             unregister(sessionId)
         }
     }
 }
-
-

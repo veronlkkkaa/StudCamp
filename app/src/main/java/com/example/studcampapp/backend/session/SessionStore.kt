@@ -19,24 +19,56 @@ class SessionStore {
 
     private val mutex = Mutex()
     private val usersById = LinkedHashMap<String, User>()
+    private val userIdByLoginKey = LinkedHashMap<String, String>()
     private val sessionsById = LinkedHashMap<String, String>()
     private val messages = ArrayDeque<ChatMessage>()
     private var nextMessageId = 1
 
     suspend fun join(request: JoinRequest): JoinResponse = mutex.withLock {
-        val user = User(
-            id = UUID.randomUUID().toString(),
-            login = request.login,
-            firstName = request.firstName,
-            lastName = request.lastName,
-            middleName = request.middleName,
-            avatarUrl = request.avatarUrl,
-            phone = request.phone,
-            email = request.email
-        )
-        val sessionId = UUID.randomUUID().toString()
+        val normalizedLogin = request.login.trim()
+        val loginKey = normalizedLogin.lowercase()
+        val existingUserId = userIdByLoginKey[loginKey]
 
-        usersById[user.id] = user
+        val user = if (existingUserId == null) {
+            val createdUser = User(
+                id = UUID.randomUUID().toString(),
+                login = normalizedLogin,
+                firstName = request.firstName,
+                lastName = request.lastName,
+                middleName = request.middleName,
+                avatarUrl = request.avatarUrl,
+                phone = request.phone,
+                email = request.email
+            )
+            usersById[createdUser.id] = createdUser
+            userIdByLoginKey[loginKey] = createdUser.id
+            createdUser
+        } else {
+            val existing = usersById[existingUserId] ?: User(
+                id = existingUserId,
+                login = normalizedLogin,
+                firstName = null,
+                lastName = null,
+                middleName = null,
+                avatarUrl = null,
+                phone = null,
+                email = null
+            )
+            val updated = existing.copy(
+                login = normalizedLogin,
+                firstName = request.firstName ?: existing.firstName,
+                lastName = request.lastName ?: existing.lastName,
+                middleName = request.middleName ?: existing.middleName,
+                avatarUrl = request.avatarUrl ?: existing.avatarUrl,
+                phone = request.phone ?: existing.phone,
+                email = request.email ?: existing.email
+            )
+            usersById[updated.id] = updated
+            userIdByLoginKey[loginKey] = updated.id
+            updated
+        }
+
+        val sessionId = UUID.randomUUID().toString()
         sessionsById[sessionId] = user.id
 
         JoinResponse(
@@ -84,11 +116,17 @@ class SessionStore {
         if (hasOtherSessions) {
             return@withLock null
         }
-        usersById.remove(userId)
+
+        val removedUser = usersById.remove(userId)
+        if (removedUser != null) {
+            userIdByLoginKey.remove(removedUser.login.lowercase())
+        }
+        removedUser
     }
 
     suspend fun clear() = mutex.withLock {
         usersById.clear()
+        userIdByLoginKey.clear()
         sessionsById.clear()
         messages.clear()
         nextMessageId = 1
