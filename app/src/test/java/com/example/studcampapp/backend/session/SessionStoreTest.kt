@@ -1,6 +1,6 @@
 package com.example.studcampapp.backend.session
 
-import com.example.studcampapp.model.dto.JoinRequest
+import com.example.studcampapp.network.dto.JoinRequest
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull

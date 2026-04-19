@@ -5,8 +5,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import com.example.studcampapp.backend.server.HostRuntime
-import com.example.studcampapp.model.RoomHistoryStore
 import com.example.studcampapp.ui.navigation.NavGraph
 import com.example.studcampapp.ui.theme.AppTheme
 
@@ -23,12 +21,5 @@ class MainActivity : ComponentActivity() {
                 NavGraph()
             }
         }
-    }
-
-    override fun onDestroy() {
-        if (isFinishing) {
-            HostRuntime.stop()
-        }
-        super.onDestroy()
     }
 }
