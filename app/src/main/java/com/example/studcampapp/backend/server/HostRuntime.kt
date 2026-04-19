@@ -1,5 +1,6 @@
 package com.example.studcampapp.backend.server
 
+import android.content.Context
 import com.example.studcampapp.backend.file.FileStore
 import com.example.studcampapp.backend.session.SessionStore
 import java.io.File
@@ -9,16 +10,22 @@ object HostRuntime {
     private var hostServer: HostServer? = null
 
     @Synchronized
-    fun start(cacheDir: File) {
+    fun start(context: Context, roomName: String = "StudCamp Room") {
         if (hostServer != null) return
 
-        val fileStore = FileStore(File(cacheDir, "host-files"))
+        val fileStore = FileStore(File(context.cacheDir, "host-files"))
+        val nsdPublisher = NsdPublisher(context.applicationContext)
         hostServer = HostServer(
             sessionStore = sessionStore,
-            fileStore = fileStore
+            fileStore = fileStore,
+            nsdPublisher = nsdPublisher,
+            roomName = roomName
         )
         hostServer?.start()
     }
+
+    @Synchronized
+    fun isRunning(): Boolean = hostServer != null
 
     @Synchronized
     fun stop() {

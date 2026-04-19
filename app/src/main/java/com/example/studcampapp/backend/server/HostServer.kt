@@ -45,6 +45,8 @@ import kotlinx.serialization.json.Json
 class HostServer(
     private val sessionStore: SessionStore,
     private val fileStore: FileStore,
+    private val nsdPublisher: NsdPublisher,
+    private val roomName: String,
     private val host: String = "0.0.0.0",
     private val port: Int = 8080
 ) {
@@ -76,6 +78,7 @@ class HostServer(
         ).start(wait = false)
 
         engine = startedEngine
+        nsdPublisher.start(serviceName = roomName, port = port)
         println("HostServer started on $host:$port")
     }
 
@@ -86,15 +89,11 @@ class HostServer(
             connectionRegistry.closeAll(CloseReason(CloseReason.Codes.NORMAL, "Host stopped"))
             sessionStore.clear()
             fileStore.clear()
-            stopNsdPublisher()
+            nsdPublisher.stop()
         }
 
         engine?.stop(gracePeriodMillis = 1_000, timeoutMillis = 2_000)
         engine = null
-    }
-
-    private fun stopNsdPublisher() {
-        // NSD lifecycle will be connected in issue #31.
     }
 }
 
@@ -340,4 +339,3 @@ private fun extractSessionId(call: ApplicationCall): String? {
         else -> null
     }
 }
-
