@@ -5,6 +5,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SessionStoreTest {
@@ -94,5 +95,36 @@ class SessionStoreTest {
         assertEquals(0, state.users.size)
         assertEquals(0, state.messages.size)
     }
-}
 
+    @Test
+    fun join_withSameLogin_reusesUserIdButCreatesNewSession() = runBlocking {
+        val store = SessionStore()
+
+        val first = store.join(
+            JoinRequest(
+                login = "same_user",
+                firstName = "First",
+                lastName = null,
+                middleName = null,
+                avatarUrl = null,
+                phone = null,
+                email = null
+            )
+        )
+        val second = store.join(
+            JoinRequest(
+                login = "same_user",
+                firstName = "Updated",
+                lastName = null,
+                middleName = null,
+                avatarUrl = null,
+                phone = null,
+                email = null
+            )
+        )
+
+        assertEquals(first.user.id, second.user.id)
+        assertEquals("Updated", second.user.firstName)
+        assertTrue(first.sessionId != second.sessionId)
+    }
+}
