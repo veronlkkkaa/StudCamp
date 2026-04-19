@@ -72,7 +72,7 @@ class HostModuleTest {
     }
 
     @Test
-    fun join_withBlankLogin_returnsBadRequest() = testApplication {
+    fun join_withBlankLogin_returnsGuestUser() = testApplication {
         application {
             hostModule(SessionStore())
         }
@@ -82,8 +82,9 @@ class HostModuleTest {
             setBody("""{"login":"   "}""")
         }
 
-        assertEquals(HttpStatusCode.BadRequest, response.status)
-        assertTrue(response.bodyAsText().contains("login must not be blank"))
+        assertEquals(HttpStatusCode.OK, response.status)
+        val joinResponse = runBlocking { json.decodeFromString<JoinResponse>(response.bodyAsText()) }
+        assertEquals("guest1", joinResponse.user.login)
     }
 
     @Test
@@ -164,5 +165,73 @@ class HostModuleTest {
 
         val response = client.get("/files/missing")
         assertEquals(HttpStatusCode.NotFound, response.status)
+    }
+
+    @Test
+    fun auth_registerAndLogin_withSameNickname_returnsConflict() = testApplication {
+        application {
+            hostModule(SessionStore())
+        }
+
+        val registerResponse = client.post("/auth/register") {
+            contentType(ContentType.Application.Json)
+            setBody(
+                """
+                {
+                  "login": "auth_user",
+                  "firstName": "Auth",
+                  "lastName": null,
+                  "middleName": null,
+                  "avatarUrl": null,
+                  "phone": null,
+                  "email": null
+                }
+                """.trimIndent()
+            )
+        }
+
+        val loginResponse = client.post("/auth/login") {
+            contentType(ContentType.Application.Json)
+            setBody(
+                """
+                {
+                  "login": "auth_user",
+                  "firstName": "AuthUpdated",
+                  "lastName": null,
+                  "middleName": null,
+                  "avatarUrl": null,
+                  "phone": null,
+                  "email": null
+                }
+                """.trimIndent()
+            )
+        }
+
+        assertEquals(HttpStatusCode.OK, registerResponse.status)
+        assertEquals(HttpStatusCode.Conflict, loginResponse.status)
+        assertTrue(loginResponse.bodyAsText().contains("Nickname is already in use"))
+    }
+
+    @Test
+    fun auth_register_withDifferentCaseLogins_allowsBoth() = testApplication {
+        application {
+            hostModule(SessionStore())
+        }
+
+        val firstResponse = client.post("/auth/register") {
+            contentType(ContentType.Application.Json)
+            setBody("""{"login":"Petya","firstName":null,"lastName":null,"middleName":null,"avatarUrl":null,"phone":null,"email":null}""")
+        }
+        val secondResponse = client.post("/auth/register") {
+            contentType(ContentType.Application.Json)
+            setBody("""{"login":"petya","firstName":null,"lastName":null,"middleName":null,"avatarUrl":null,"phone":null,"email":null}""")
+        }
+
+        assertEquals(HttpStatusCode.OK, firstResponse.status)
+        assertEquals(HttpStatusCode.OK, secondResponse.status)
+
+        val first = runBlocking { json.decodeFromString<JoinResponse>(firstResponse.bodyAsText()) }
+        val second = runBlocking { json.decodeFromString<JoinResponse>(secondResponse.bodyAsText()) }
+        assertTrue(first.user.id != second.user.id)
     }
 }

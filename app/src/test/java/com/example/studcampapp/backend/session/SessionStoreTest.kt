@@ -5,6 +5,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SessionStoreTest {
@@ -94,5 +95,101 @@ class SessionStoreTest {
         assertEquals(0, state.users.size)
         assertEquals(0, state.messages.size)
     }
-}
 
+    @Test
+    fun join_withSameLogin_returnsNicknameConflict() = runBlocking {
+        val store = SessionStore()
+
+        store.join(
+            JoinRequest(
+                login = "same_user",
+                firstName = "First",
+                lastName = null,
+                middleName = null,
+                avatarUrl = null,
+                phone = null,
+                email = null
+            )
+        )
+
+        val secondResult = runCatching {
+            store.join(
+                JoinRequest(
+                    login = "same_user",
+                    firstName = "Updated",
+                    lastName = null,
+                    middleName = null,
+                    avatarUrl = null,
+                    phone = null,
+                    email = null
+                )
+            )
+        }
+
+        assertTrue(secondResult.isFailure)
+        assertTrue(secondResult.exceptionOrNull() is NicknameOccupiedException)
+    }
+
+    @Test
+    fun join_withDifferentLetterCase_allowsBothUsers() = runBlocking {
+        val store = SessionStore()
+
+        val first = store.join(
+            JoinRequest(
+                login = "Petya",
+                firstName = null,
+                lastName = null,
+                middleName = null,
+                avatarUrl = null,
+                phone = null,
+                email = null
+            )
+        )
+        val second = store.join(
+            JoinRequest(
+                login = "petya",
+                firstName = null,
+                lastName = null,
+                middleName = null,
+                avatarUrl = null,
+                phone = null,
+                email = null
+            )
+        )
+
+        assertTrue(first.user.id != second.user.id)
+        assertEquals("Petya", first.user.login)
+        assertEquals("petya", second.user.login)
+    }
+
+    @Test
+    fun join_withBlankLogin_assignsGuestNickname() = runBlocking {
+        val store = SessionStore()
+
+        val first = store.join(
+            JoinRequest(
+                login = "   ",
+                firstName = null,
+                lastName = null,
+                middleName = null,
+                avatarUrl = null,
+                phone = null,
+                email = null
+            )
+        )
+        val second = store.join(
+            JoinRequest(
+                login = "",
+                firstName = null,
+                lastName = null,
+                middleName = null,
+                avatarUrl = null,
+                phone = null,
+                email = null
+            )
+        )
+
+        assertEquals("guest1", first.user.login)
+        assertEquals("guest2", second.user.login)
+    }
+}

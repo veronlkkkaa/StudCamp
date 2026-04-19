@@ -120,13 +120,13 @@ fun CreateRoomScreen(
 
             Button(
                 onClick = {
-                    if (roomName.isBlank() || nickname.isBlank()) return@Button
+                    if (roomName.isBlank()) return@Button
                     val safeRoomName = roomName.trim()
                     val safeNickname = nickname.trim()
                     onStartHost(safeRoomName)
                     viewModel.join("127.0.0.1", 8080, safeNickname, safeRoomName)
                 },
-                enabled = !viewModel.isLoading && roomName.isNotBlank() && nickname.isNotBlank(),
+                enabled = !viewModel.isLoading && roomName.isNotBlank(),
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
