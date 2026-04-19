@@ -2,10 +2,10 @@ package com.example.studcampapp.backend.server
 
 import com.example.studcampapp.backend.file.FileStore
 import com.example.studcampapp.backend.session.SessionStore
-import com.example.studcampapp.model.dto.JoinRequest
-import com.example.studcampapp.model.dto.UploadResponse
-import com.example.studcampapp.model.ws.WsClientEvent
-import com.example.studcampapp.model.ws.WsServerEvent
+import com.example.studcampapp.network.dto.JoinRequest
+import com.example.studcampapp.network.dto.UploadResponse
+import com.example.studcampapp.network.ws.WsClientEvent
+import com.example.studcampapp.network.ws.WsServerEvent
 import io.ktor.http.ContentDisposition
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders

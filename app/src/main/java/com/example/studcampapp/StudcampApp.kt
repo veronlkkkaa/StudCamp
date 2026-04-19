@@ -7,7 +7,7 @@ import com.example.studcampapp.data.RoomHistoryStore
 class StudcampApp : Application() {
     override fun onCreate() {
         super.onCreate()
-        HostRuntime.start()
+        HostRuntime.start(cacheDir)
         RoomHistoryStore.init(this)
     }
 
