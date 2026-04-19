@@ -12,6 +12,8 @@ import java.util.UUID
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
+class NicknameOccupiedException(message: String) : IllegalStateException(message)
+
 class SessionStore {
     private companion object {
         const val MAX_MESSAGES = 500
@@ -22,11 +24,15 @@ class SessionStore {
     private val sessionsById = LinkedHashMap<String, String>()
     private val messages = ArrayDeque<ChatMessage>()
     private var nextMessageId = 1
+    private var nextGuestNumber = 1
 
     suspend fun join(request: JoinRequest): JoinResponse = mutex.withLock {
+        val login = request.login.trim().ifBlank { generateGuestLoginUnsafe() }
+        ensureNicknameIsAvailableUnsafe(login)
+
         val user = User(
             id = UUID.randomUUID().toString(),
-            login = request.login,
+            login = login,
             firstName = request.firstName,
             lastName = request.lastName,
             middleName = request.middleName,
@@ -92,6 +98,23 @@ class SessionStore {
         sessionsById.clear()
         messages.clear()
         nextMessageId = 1
+        nextGuestNumber = 1
+    }
+
+    private fun ensureNicknameIsAvailableUnsafe(login: String) {
+        if (usersById.values.any { it.login == login }) {
+            throw NicknameOccupiedException("Nickname is already in use")
+        }
+    }
+
+    private fun generateGuestLoginUnsafe(): String {
+        while (true) {
+            val candidate = "guest$nextGuestNumber"
+            nextGuestNumber += 1
+            if (usersById.values.none { it.login == candidate }) {
+                return candidate
+            }
+        }
     }
 
     private fun roomStateUnsafe(): RoomState {

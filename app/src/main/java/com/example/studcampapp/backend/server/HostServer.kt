@@ -1,6 +1,7 @@
 package com.example.studcampapp.backend.server
 
 import com.example.studcampapp.backend.file.FileStore
+import com.example.studcampapp.backend.session.NicknameOccupiedException
 import com.example.studcampapp.backend.session.SessionStore
 import com.example.studcampapp.network.dto.JoinRequest
 import com.example.studcampapp.network.dto.UploadResponse
@@ -120,20 +121,17 @@ fun Application.hostModule(
             call.respond(HttpStatusCode.OK, mapOf("status" to "ok"))
         }
 
+        post("/auth/register") {
+            handleJoinOrAuth(call, sessionStore)
+        }
+
+        post("/auth/login") {
+            handleJoinOrAuth(call, sessionStore)
+        }
+
+        // Backward-compatible alias for older clients.
         post("/join") {
-            val request = runCatching { call.receive<JoinRequest>() }
-                .getOrElse {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid join payload"))
-                    return@post
-                }
-
-            if (request.login.isBlank()) {
-                call.respond(HttpStatusCode.BadRequest, mapOf("error" to "login must not be blank"))
-                return@post
-            }
-
-            val response = sessionStore.join(request)
-            call.respond(HttpStatusCode.OK, response)
+            handleJoinOrAuth(call, sessionStore)
         }
 
         post("/files/upload") {
@@ -231,8 +229,9 @@ private fun Route.wsRoute(
             close(CloseReason(CloseReason.Codes.VIOLATED_POLICY, "invalid sessionId"))
             return@webSocket
         }
+        val userId = user.id
 
-        connectionRegistry.register(sessionId, this)
+        connectionRegistry.register(sessionId, userId, this)
         connectionRegistry.sendTo(
             sessionId,
             WsServerEvent.RoomStateEvent(sessionStore.getRoomState()),
@@ -328,6 +327,25 @@ private fun Route.wsRoute(
             }
         }
     }
+}
+
+private suspend fun handleJoinOrAuth(call: ApplicationCall, sessionStore: SessionStore) {
+    val request = runCatching { call.receive<JoinRequest>() }
+        .getOrElse {
+            call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid join payload"))
+            return
+        }
+
+    val response = runCatching { sessionStore.join(request) }
+        .getOrElse { error ->
+            if (error is NicknameOccupiedException) {
+                call.respond(HttpStatusCode.Conflict, mapOf("error" to (error.message ?: "Nickname is already in use")))
+                return
+            }
+            throw error
+        }
+
+    call.respond(HttpStatusCode.OK, response)
 }
 
 private fun extractSessionId(call: ApplicationCall): String? {
