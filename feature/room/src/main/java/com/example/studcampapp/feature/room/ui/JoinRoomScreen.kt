@@ -111,11 +111,11 @@ fun JoinRoomScreen(
 
             Button(
                 onClick = {
-                    if (ip.isBlank() || nickname.isBlank()) return@Button
+                    if (ip.isBlank()) return@Button
                     val trimmedIp = ip.trim()
                     viewModel.join(trimmedIp, 8080, nickname.trim(), trimmedIp)
                 },
-                enabled = !viewModel.isLoading && ip.isNotBlank() && nickname.isNotBlank(),
+                enabled = !viewModel.isLoading && ip.isNotBlank(),
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),

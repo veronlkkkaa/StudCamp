@@ -12,6 +12,8 @@ import java.util.UUID
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
+class NicknameOccupiedException(message: String) : IllegalStateException(message)
+
 class SessionStore {
     private companion object {
         const val MAX_MESSAGES = 500
@@ -19,56 +21,28 @@ class SessionStore {
 
     private val mutex = Mutex()
     private val usersById = LinkedHashMap<String, User>()
-    private val userIdByLoginKey = LinkedHashMap<String, String>()
     private val sessionsById = LinkedHashMap<String, String>()
     private val messages = ArrayDeque<ChatMessage>()
     private var nextMessageId = 1
+    private var nextGuestNumber = 1
 
     suspend fun join(request: JoinRequest): JoinResponse = mutex.withLock {
-        val normalizedLogin = request.login.trim()
-        val loginKey = normalizedLogin.lowercase()
-        val existingUserId = userIdByLoginKey[loginKey]
+        val login = request.login.trim().ifBlank { generateGuestLoginUnsafe() }
+        ensureNicknameIsAvailableUnsafe(login)
 
-        val user = if (existingUserId == null) {
-            val createdUser = User(
-                id = UUID.randomUUID().toString(),
-                login = normalizedLogin,
-                firstName = request.firstName,
-                lastName = request.lastName,
-                middleName = request.middleName,
-                avatarUrl = request.avatarUrl,
-                phone = request.phone,
-                email = request.email
-            )
-            usersById[createdUser.id] = createdUser
-            userIdByLoginKey[loginKey] = createdUser.id
-            createdUser
-        } else {
-            val existing = usersById[existingUserId] ?: User(
-                id = existingUserId,
-                login = normalizedLogin,
-                firstName = null,
-                lastName = null,
-                middleName = null,
-                avatarUrl = null,
-                phone = null,
-                email = null
-            )
-            val updated = existing.copy(
-                login = normalizedLogin,
-                firstName = request.firstName ?: existing.firstName,
-                lastName = request.lastName ?: existing.lastName,
-                middleName = request.middleName ?: existing.middleName,
-                avatarUrl = request.avatarUrl ?: existing.avatarUrl,
-                phone = request.phone ?: existing.phone,
-                email = request.email ?: existing.email
-            )
-            usersById[updated.id] = updated
-            userIdByLoginKey[loginKey] = updated.id
-            updated
-        }
-
+        val user = User(
+            id = UUID.randomUUID().toString(),
+            login = login,
+            firstName = request.firstName,
+            lastName = request.lastName,
+            middleName = request.middleName,
+            avatarUrl = request.avatarUrl,
+            phone = request.phone,
+            email = request.email
+        )
         val sessionId = UUID.randomUUID().toString()
+
+        usersById[user.id] = user
         sessionsById[sessionId] = user.id
 
         JoinResponse(
@@ -116,20 +90,31 @@ class SessionStore {
         if (hasOtherSessions) {
             return@withLock null
         }
-
-        val removedUser = usersById.remove(userId)
-        if (removedUser != null) {
-            userIdByLoginKey.remove(removedUser.login.lowercase())
-        }
-        removedUser
+        usersById.remove(userId)
     }
 
     suspend fun clear() = mutex.withLock {
         usersById.clear()
-        userIdByLoginKey.clear()
         sessionsById.clear()
         messages.clear()
         nextMessageId = 1
+        nextGuestNumber = 1
+    }
+
+    private fun ensureNicknameIsAvailableUnsafe(login: String) {
+        if (usersById.values.any { it.login == login }) {
+            throw NicknameOccupiedException("Nickname is already in use")
+        }
+    }
+
+    private fun generateGuestLoginUnsafe(): String {
+        while (true) {
+            val candidate = "guest$nextGuestNumber"
+            nextGuestNumber += 1
+            if (usersById.values.none { it.login == candidate }) {
+                return candidate
+            }
+        }
     }
 
     private fun roomStateUnsafe(): RoomState {

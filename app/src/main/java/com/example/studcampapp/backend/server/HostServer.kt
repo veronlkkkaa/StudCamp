@@ -1,6 +1,7 @@
 package com.example.studcampapp.backend.server
 
 import com.example.studcampapp.backend.file.FileStore
+import com.example.studcampapp.backend.session.NicknameOccupiedException
 import com.example.studcampapp.backend.session.SessionStore
 import com.example.studcampapp.network.dto.JoinRequest
 import com.example.studcampapp.network.dto.UploadResponse
@@ -335,12 +336,15 @@ private suspend fun handleJoinOrAuth(call: ApplicationCall, sessionStore: Sessio
             return
         }
 
-    if (request.login.isBlank()) {
-        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "login must not be blank"))
-        return
-    }
+    val response = runCatching { sessionStore.join(request) }
+        .getOrElse { error ->
+            if (error is NicknameOccupiedException) {
+                call.respond(HttpStatusCode.Conflict, mapOf("error" to (error.message ?: "Nickname is already in use")))
+                return
+            }
+            throw error
+        }
 
-    val response = sessionStore.join(request)
     call.respond(HttpStatusCode.OK, response)
 }
 

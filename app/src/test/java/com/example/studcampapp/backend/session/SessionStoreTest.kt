@@ -97,10 +97,10 @@ class SessionStoreTest {
     }
 
     @Test
-    fun join_withSameLogin_reusesUserIdButCreatesNewSession() = runBlocking {
+    fun join_withSameLogin_returnsNicknameConflict() = runBlocking {
         val store = SessionStore()
 
-        val first = store.join(
+        store.join(
             JoinRequest(
                 login = "same_user",
                 firstName = "First",
@@ -111,10 +111,44 @@ class SessionStoreTest {
                 email = null
             )
         )
+
+        val secondResult = runCatching {
+            store.join(
+                JoinRequest(
+                    login = "same_user",
+                    firstName = "Updated",
+                    lastName = null,
+                    middleName = null,
+                    avatarUrl = null,
+                    phone = null,
+                    email = null
+                )
+            )
+        }
+
+        assertTrue(secondResult.isFailure)
+        assertTrue(secondResult.exceptionOrNull() is NicknameOccupiedException)
+    }
+
+    @Test
+    fun join_withDifferentLetterCase_allowsBothUsers() = runBlocking {
+        val store = SessionStore()
+
+        val first = store.join(
+            JoinRequest(
+                login = "Petya",
+                firstName = null,
+                lastName = null,
+                middleName = null,
+                avatarUrl = null,
+                phone = null,
+                email = null
+            )
+        )
         val second = store.join(
             JoinRequest(
-                login = "same_user",
-                firstName = "Updated",
+                login = "petya",
+                firstName = null,
                 lastName = null,
                 middleName = null,
                 avatarUrl = null,
@@ -123,8 +157,39 @@ class SessionStoreTest {
             )
         )
 
-        assertEquals(first.user.id, second.user.id)
-        assertEquals("Updated", second.user.firstName)
-        assertTrue(first.sessionId != second.sessionId)
+        assertTrue(first.user.id != second.user.id)
+        assertEquals("Petya", first.user.login)
+        assertEquals("petya", second.user.login)
+    }
+
+    @Test
+    fun join_withBlankLogin_assignsGuestNickname() = runBlocking {
+        val store = SessionStore()
+
+        val first = store.join(
+            JoinRequest(
+                login = "   ",
+                firstName = null,
+                lastName = null,
+                middleName = null,
+                avatarUrl = null,
+                phone = null,
+                email = null
+            )
+        )
+        val second = store.join(
+            JoinRequest(
+                login = "",
+                firstName = null,
+                lastName = null,
+                middleName = null,
+                avatarUrl = null,
+                phone = null,
+                email = null
+            )
+        )
+
+        assertEquals("guest1", first.user.login)
+        assertEquals("guest2", second.user.login)
     }
 }
