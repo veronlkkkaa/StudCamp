@@ -37,6 +37,11 @@ object RoomHistoryStore {
         }
     }
 
+    fun clear() {
+        _rooms.clear()
+        prefs?.edit()?.remove("rooms")?.apply()
+    }
+
     private fun load() {
         val str = prefs?.getString("rooms", null) ?: return
         val list = runCatching { json.decodeFromString<List<SavedRoom>>(str) }.getOrNull() ?: return

@@ -160,7 +160,7 @@ object ChatClient {
             val bytes = withContext(Dispatchers.IO) {
                 context.contentResolver.openInputStream(uri)!!.use { it.readBytes() }
             }
-            val response: UploadResponse = httpClient.post("$baseUrl/upload") {
+            val response: UploadResponse = httpClient.post("$baseUrl/files/upload") {
                 header(HttpHeaders.Authorization, "Session $sid")
                 setBody(MultiPartFormDataContent(formData {
                     append("file", bytes, Headers.build {
