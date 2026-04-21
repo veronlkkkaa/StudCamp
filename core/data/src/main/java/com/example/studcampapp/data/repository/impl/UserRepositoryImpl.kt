@@ -9,6 +9,7 @@ import com.example.studcampapp.model.User
 object UserRepositoryImpl : UserRepository {
     override val currentUser: User? get() = UserStore.currentUser
     override val localAvatarUri: Uri? get() = UserStore.localAvatarUri
+    override val isGuest: Boolean get() = UserStore.isGuest
 
     override fun login(user: User) = UserStore.login(user)
     override fun logout() {

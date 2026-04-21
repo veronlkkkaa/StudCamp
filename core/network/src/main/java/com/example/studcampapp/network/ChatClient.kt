@@ -3,11 +3,14 @@ package com.example.studcampapp.network
 import android.app.DownloadManager
 import android.content.Context
 import android.net.Uri
+import android.os.Build
 import android.os.Environment
+import androidx.annotation.RequiresApi
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.core.net.toUri
 import com.example.studcampapp.model.ChatMessage
 import com.example.studcampapp.model.FileInfo
 import com.example.studcampapp.model.MessageStatus
@@ -56,6 +59,10 @@ object ChatClient {
         private set
     var isHostClosed by mutableStateOf(false)
         private set
+    var currentRoomName by mutableStateOf("")
+        private set
+    var currentRoomId: String = ""
+        private set
 
     private var sessionId: String? = null
     private var serverIp: String = ""
@@ -83,7 +90,7 @@ object ChatClient {
     suspend fun join(ip: String, port: Int, login: String): Result<Unit> = runCatching {
         serverIp = ip
         serverPort = port
-        val response: JoinResponse = httpClient.post("http://$ip:$port/join") {
+        val httpResponse = httpClient.post("http://$ip:$port/join") {
             header(HttpHeaders.ContentType, "application/json")
             setBody(
                 JoinRequest(
@@ -95,10 +102,18 @@ object ChatClient {
                     email = null
                 )
             )
-        }.body()
+        }
+        if (httpResponse.status.value !in 200..299) {
+            val errorMap = runCatching { httpResponse.body<Map<String, String>>() }.getOrNull()
+            val serverMsg = errorMap?.get("error") ?: ""
+            throw Exception(serverMsg.ifBlank { "HTTP ${httpResponse.status.value}" })
+        }
+        val response: JoinResponse = httpResponse.body()
         sessionId = response.sessionId
         myUser = response.user
+        currentRoomId = response.state.id
         withContext(Dispatchers.Main) {
+            currentRoomName = response.state.name
             messages.clear()
             messages.addAll(response.state.messages)
             participants.clear()
@@ -106,6 +121,7 @@ object ChatClient {
         }
     }
 
+    @RequiresApi(Build.VERSION_CODES.O)
     fun connect() {
         val sid = sessionId ?: return
         connectJob?.cancel()
@@ -127,11 +143,12 @@ object ChatClient {
                     }
                 }
             }.onFailure { e ->
-                withContext(Dispatchers.Main) { connectionError = e.message }
+                withContext(Dispatchers.Main) { connectionError = mapNetworkError(e) }
             }
         }
     }
 
+    @RequiresApi(Build.VERSION_CODES.O)
     fun sendMessage(text: String, fileInfo: FileInfo? = null) {
         val user = myUser ?: return
         val tempId = --tempIdCounter
@@ -144,7 +161,7 @@ object ChatClient {
             fileInfo = fileInfo,
             isPending = true
         )
-        scope.launch(Dispatchers.Main) { messages.add(tempMsg) }
+        messages.add(tempMsg)
         pendingEvents.trySend(WsClientEvent.SendMessage(text = text, fileInfo = fileInfo))
     }
 
@@ -184,7 +201,7 @@ object ChatClient {
     fun downloadFile(context: Context, fileInfo: FileInfo): Long {
         val url = if (fileInfo.fileUrl.startsWith("http")) fileInfo.fileUrl
                   else "$baseUrl${fileInfo.fileUrl}"
-        val request = DownloadManager.Request(Uri.parse(url))
+        val request = DownloadManager.Request(url.toUri())
             .setTitle(fileInfo.fileName)
             .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
             .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileInfo.fileName)
@@ -193,13 +210,28 @@ object ChatClient {
         return dm.enqueue(request)
     }
 
+    suspend fun renameRoom(newName: String): Result<Unit> = runCatching {
+        val sid = sessionId ?: throw IllegalStateException("Not connected")
+        val response = httpClient.post("http://$serverIp:$serverPort/room/rename") {
+            header(HttpHeaders.ContentType, "application/json")
+            header(HttpHeaders.Authorization, "Session $sid")
+            setBody(mapOf("name" to newName))
+        }
+        if (response.status.value !in 200..299) {
+            val errorMap = runCatching { response.body<Map<String, String>>() }.getOrNull()
+            throw Exception(errorMap?.get("error") ?: "HTTP ${response.status.value}")
+        }
+    }
+
     fun disconnect() {
         connectJob?.cancel()
         connectJob = null
         sessionId = null
         myUser = null
+        currentRoomId = ""
         tempIdCounter = 0
         scope.launch(Dispatchers.Main) {
+            currentRoomName = ""
             messages.clear()
             participants.clear()
             connectionError = null
@@ -207,6 +239,19 @@ object ChatClient {
         }
     }
 
+    private fun mapNetworkError(e: Throwable): String {
+        val msg = e.message ?: ""
+        return when {
+            e is java.net.ConnectException ||
+            msg.contains("Connection refused", ignoreCase = true) -> "Не удалось подключиться к серверу"
+            e is java.net.SocketTimeoutException ||
+            msg.contains("timed out", ignoreCase = true) -> "Время подключения истекло"
+            e is java.net.UnknownHostException -> "Неверный адрес сервера"
+            else -> "Соединение прервано"
+        }
+    }
+
+    @RequiresApi(Build.VERSION_CODES.O)
     private fun handleEvent(event: WsServerEvent) {
         when (event) {
             is WsServerEvent.RoomStateEvent -> {
@@ -240,6 +285,9 @@ object ChatClient {
                         isSystem = true
                     ))
                 }
+            }
+            is WsServerEvent.RoomRenamed -> {
+                currentRoomName = event.name
             }
             is WsServerEvent.HostClosed -> {
                 isHostClosed = true

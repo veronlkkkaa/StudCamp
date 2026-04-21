@@ -43,6 +43,7 @@ fun ProfileScreen(
 ) {
     val appColors = LocalAppColors.current
     val user = viewModel.currentUser
+    val isGuest = viewModel.isGuest
     val localAvatarUri = viewModel.localAvatarUri
 
     val avatarPicker = rememberLauncherForActivityResult(
@@ -80,110 +81,72 @@ fun ProfileScreen(
             )
         }
 
-        if (user == null) {
-            Column(
+        if (user == null) return@Column
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Spacer(modifier = Modifier.height(36.dp))
+
+            Box(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 20.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
+                    .size(96.dp)
+                    .clip(CircleShape)
+                    .then(
+                        if (!isGuest) Modifier.clickable { avatarPicker.launch("image/*") }
+                        else Modifier
+                    ),
+                contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = "Аноним",
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = InterFontFamily,
-                    color = appColors.textPrimary
-                )
-                Spacer(modifier = Modifier.height(32.dp))
-                Button(
-                    onClick = {
-                        viewModel.logout()
-                        onLogout()
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(52.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0x1FFF6B6B),
-                        contentColor = Color(0xFFFF6B6B)
+                if (localAvatarUri != null) {
+                    AsyncImage(
+                        model = localAvatarUri,
+                        contentDescription = "Аватар",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
                     )
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ExitToApp,
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Выйти",
-                        fontSize = 16.sp,
-                        fontFamily = InterFontFamily,
-                        fontWeight = FontWeight.SemiBold
-                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                Brush.radialGradient(colors = listOf(PurpleLight, PurpleVibrant))
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = user.firstName?.firstOrNull()?.toString()
+                                ?: user.login.firstOrNull()?.uppercase() ?: "?",
+                            fontSize = 38.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = InterFontFamily,
+                            color = appColors.textPrimary
+                        )
+                    }
+                }
+
+                if (!isGuest && localAvatarUri == null) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.Black.copy(alpha = 0.25f), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AddAPhoto,
+                            contentDescription = "Загрузить фото",
+                            tint = Color.White.copy(alpha = 0.8f),
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
                 }
             }
-        } else {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 20.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Spacer(modifier = Modifier.height(36.dp))
 
-                Box(
-                    modifier = Modifier
-                        .size(96.dp)
-                        .clip(CircleShape)
-                        .clickable { avatarPicker.launch("image/*") },
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (localAvatarUri != null) {
-                        AsyncImage(
-                            model = localAvatarUri,
-                            contentDescription = "Аватар",
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    } else {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(
-                                    Brush.radialGradient(colors = listOf(PurpleLight, PurpleVibrant))
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = user.firstName?.firstOrNull()?.toString() ?: "?",
-                                fontSize = 38.sp,
-                                fontWeight = FontWeight.Bold,
-                                fontFamily = InterFontFamily,
-                                color = appColors.textPrimary
-                            )
-                        }
-                    }
-
-                    if (localAvatarUri == null) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(Color.Black.copy(alpha = 0.25f), CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.AddAPhoto,
-                                contentDescription = "Загрузить фото",
-                                tint = Color.White.copy(alpha = 0.8f),
-                                modifier = Modifier.size(22.dp)
-                            )
-                        }
-                    }
-                }
-
+            if (!isGuest) {
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = "Нажмите, чтобы изменить",
@@ -191,36 +154,37 @@ fun ProfileScreen(
                     fontFamily = InterFontFamily,
                     color = appColors.textSecondary.copy(alpha = 0.6f)
                 )
+            }
 
-                Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
+            Text(
+                text = "${user.firstName.orEmpty()} ${user.lastName.orEmpty()}".trim().ifBlank { user.login },
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = InterFontFamily,
+                color = appColors.textPrimary
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "@${user.login}",
+                fontSize = 14.sp,
+                fontFamily = InterFontFamily,
+                color = appColors.accent
+            )
+
+            if (!user.phone.isNullOrBlank()) {
+                Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = "${user.firstName.orEmpty()} ${user.lastName.orEmpty()}".trim().ifBlank { user.login },
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold,
+                    text = user.phone.orEmpty(),
+                    fontSize = 13.sp,
                     fontFamily = InterFontFamily,
-                    color = appColors.textPrimary
+                    color = appColors.textSecondary
                 )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "@${user.login}",
-                    fontSize = 14.sp,
-                    fontFamily = InterFontFamily,
-                    color = appColors.accent
-                )
+            }
 
-                if (!user.phone.isNullOrBlank()) {
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = user.phone.orEmpty(),
-                        fontSize = 13.sp,
-                        fontFamily = InterFontFamily,
-                        color = appColors.textSecondary
-                    )
-                }
-
+            if (!isGuest) {
                 Spacer(modifier = Modifier.height(6.dp))
-
                 Surface(
                     shape = RoundedCornerShape(8.dp),
                     color = Purple.copy(alpha = 0.12f)
@@ -233,67 +197,69 @@ fun ProfileScreen(
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                     )
                 }
+            }
 
-                Spacer(modifier = Modifier.height(28.dp))
+            Spacer(modifier = Modifier.height(28.dp))
 
-                Text(
-                    text = "НАСТРОЙКИ",
-                    fontSize = 11.sp,
-                    fontFamily = InterFontFamily,
-                    fontWeight = FontWeight.SemiBold,
-                    color = appColors.textSecondary,
-                    letterSpacing = 1.sp,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 8.dp, start = 4.dp)
-                )
+            Text(
+                text = "НАСТРОЙКИ",
+                fontSize = 11.sp,
+                fontFamily = InterFontFamily,
+                fontWeight = FontWeight.SemiBold,
+                color = appColors.textSecondary,
+                letterSpacing = 1.sp,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp, start = 4.dp)
+            )
 
-                Surface(
-                    shape = RoundedCornerShape(16.dp),
-                    color = appColors.surface,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column {
-                        SettingsItem(icon = Icons.Default.Person, title = "Редактировать профиль", onClick = onEditProfile)
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = appColors.surface,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column {
+                    SettingsItem(icon = Icons.Default.Person, title = "Редактировать профиль", onClick = onEditProfile)
+                    if (!isGuest) {
                         HorizontalDivider(color = Purple.copy(alpha = 0.12f), modifier = Modifier.padding(horizontal = 16.dp))
                         SettingsItem(icon = Icons.Default.Notifications, title = "Уведомления", onClick = {})
                         HorizontalDivider(color = Purple.copy(alpha = 0.12f), modifier = Modifier.padding(horizontal = 16.dp))
                         SettingsItem(icon = Icons.Default.Lock, title = "Конфиденциальность", onClick = {})
                     }
                 }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Button(
-                    onClick = {
-                        viewModel.logout()
-                        onLogout()
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(52.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0x1FFF6B6B),
-                        contentColor = Color(0xFFFF6B6B)
-                    )
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ExitToApp,
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Выйти",
-                        fontSize = 16.sp,
-                        fontFamily = InterFontFamily,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(32.dp))
             }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Button(
+                onClick = {
+                    viewModel.logout()
+                    onLogout()
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0x1FFF6B6B),
+                    contentColor = Color(0xFFFF6B6B)
+                )
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ExitToApp,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Выйти",
+                    fontSize = 16.sp,
+                    fontFamily = InterFontFamily,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+
+            Spacer(modifier = Modifier.height(32.dp))
         }
     }
 }

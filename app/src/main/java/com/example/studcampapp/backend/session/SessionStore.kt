@@ -1,6 +1,5 @@
 package com.example.studcampapp.backend.session
 
-import android.annotation.SuppressLint
 import com.example.studcampapp.model.ChatMessage
 import com.example.studcampapp.model.FileInfo
 import com.example.studcampapp.model.RoomState
@@ -25,6 +24,17 @@ class SessionStore {
     private val messages = ArrayDeque<ChatMessage>()
     private var nextMessageId = 1
     private var nextGuestNumber = 1
+    private var roomName: String = ""
+    private var roomId: String = ""
+
+    fun setInitialRoomState(name: String, id: String) {
+        roomName = name
+        roomId = id
+    }
+
+    suspend fun setRoomName(name: String) = mutex.withLock {
+        roomName = name
+    }
 
     suspend fun join(request: JoinRequest): JoinResponse = mutex.withLock {
         val login = request.login.trim().ifBlank { generateGuestLoginUnsafe() }
@@ -65,7 +75,6 @@ class SessionStore {
         roomStateUnsafe()
     }
 
-    @SuppressLint("NewApi")
     suspend fun addMessage(sessionId: String, text: String, fileInfo: FileInfo? = null): ChatMessage? = mutex.withLock {
         val userId = sessionsById[sessionId] ?: return@withLock null
         val user = usersById[userId] ?: return@withLock null
@@ -84,6 +93,20 @@ class SessionStore {
         message
     }
 
+    suspend fun addFileMessage(sessionId: String, fileId: String): ChatMessage? {
+        val fileInfo = FileInfo(
+            id = fileId,
+            fileName = fileId,
+            size = 0,
+            fileUrl = "/files/$fileId"
+        )
+        return addMessage(
+            sessionId = sessionId,
+            text = "Shared file: $fileId",
+            fileInfo = fileInfo
+        )
+    }
+
     suspend fun leave(sessionId: String): User? = mutex.withLock {
         val userId = sessionsById.remove(sessionId) ?: return@withLock null
         val hasOtherSessions = sessionsById.values.any { it == userId }
@@ -99,6 +122,8 @@ class SessionStore {
         messages.clear()
         nextMessageId = 1
         nextGuestNumber = 1
+        roomName = ""
+        roomId = ""
     }
 
     private fun ensureNicknameIsAvailableUnsafe(login: String) {
@@ -120,7 +145,9 @@ class SessionStore {
     private fun roomStateUnsafe(): RoomState {
         return RoomState(
             users = usersById.values.toList(),
-            messages = messages.toList()
+            messages = messages.toList(),
+            name = roomName,
+            id = roomId
         )
     }
 }

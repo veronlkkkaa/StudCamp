@@ -1,5 +1,7 @@
 package com.example.studcampapp.ui.navigation
 
+import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -12,6 +14,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.studcampapp.backend.server.HostForegroundService
 import com.example.studcampapp.backend.server.HostRuntime
+import com.example.studcampapp.data.UserStore
+import com.example.studcampapp.data.repository.impl.RoomRepositoryImpl
 import com.example.studcampapp.data.repository.impl.ChatRepositoryImpl
 import com.example.studcampapp.feature.auth.ui.AuthScreen
 import com.example.studcampapp.feature.auth.ui.RegisterScreen
@@ -26,11 +30,14 @@ import com.example.studcampapp.feature.room.ui.JoinRoomScreen
 import com.example.studcampapp.feature.room.ui.RoomOptionsScreen
 import com.example.studcampapp.navigation.Route
 
+@RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun NavGraph() {
     val navController = rememberNavController()
     val focusManager = LocalFocusManager.current
     val context = LocalContext.current
+
+    val startDestination: Any = if (UserStore.isLoggedIn) Route.ChatList else Route.Start
 
     NavHost(
         modifier = Modifier
@@ -39,11 +46,16 @@ fun NavGraph() {
                 detectTapGestures(onTap = { focusManager.clearFocus() })
             },
         navController = navController,
-        startDestination = Route.Start
+        startDestination = startDestination
     ) {
         composable<Route.Start> {
             StartScreen(
-                onGuestLogin = { navController.navigate(Route.ChatList) },
+                onGuestLogin = { nickname ->
+                    UserStore.loginAsGuest(nickname)
+                    navController.navigate(Route.ChatList) {
+                        popUpTo(Route.Start) { inclusive = true }
+                    }
+                },
                 onAuthLogin  = { navController.navigate(Route.Auth) },
                 onRegister   = { navController.navigate(Route.Register) }
             )
@@ -53,7 +65,7 @@ fun NavGraph() {
             AuthScreen(
                 onLoginSuccess = {
                     navController.navigate(Route.ChatList) {
-                        popUpTo(Route.Start) { inclusive = false }
+                        popUpTo(Route.Start) { inclusive = true }
                     }
                 },
                 onBack = { navController.popBackStack() }
@@ -64,7 +76,7 @@ fun NavGraph() {
             RegisterScreen(
                 onRegisterSuccess = {
                     navController.navigate(Route.ChatList) {
-                        popUpTo(Route.Start) { inclusive = false }
+                        popUpTo(Route.Start) { inclusive = true }
                     }
                 },
                 onBack = { navController.popBackStack() }
@@ -80,12 +92,16 @@ fun NavGraph() {
         }
 
         composable<Route.Chat> {
+            val isHost = HostRuntime.isRunning()
             ChatScreen(
+                isHost     = isHost,
                 onLeave    = {
+                    if (!isHost) ChatRepositoryImpl.disconnect()
+                    navController.popBackStack()
+                },
+                onCloseRoom = {
                     ChatRepositoryImpl.disconnect()
-                    if (HostRuntime.isRunning()) {
-                        HostForegroundService.stop(context)
-                    }
+                    HostForegroundService.stop(context)
                     navController.popBackStack()
                 },
                 onRoomInfo = { navController.navigate(Route.RoomInfo) }
@@ -100,6 +116,8 @@ fun NavGraph() {
             ProfileScreen(
                 onBack        = { navController.popBackStack() },
                 onLogout      = {
+                    HostForegroundService.stop(context)
+                    ChatRepositoryImpl.disconnect()
                     navController.navigate(Route.Start) {
                         popUpTo(Route.Start) { inclusive = false }
                         launchSingleTop = true
@@ -124,7 +142,11 @@ fun NavGraph() {
         composable<Route.CreateRoom> {
             CreateRoomScreen(
                 onBack        = { navController.popBackStack() },
-                onRoomCreated = { navController.navigate(Route.Chat) },
+                onRoomCreated = {
+                    navController.navigate(Route.Chat) {
+                        popUpTo(Route.ChatList) { inclusive = false }
+                    }
+                },
                 onStartHost = { roomName ->
                     HostForegroundService.start(context, roomName)
                 }
@@ -133,8 +155,14 @@ fun NavGraph() {
 
         composable<Route.JoinRoom> {
             JoinRoomScreen(
-                onBack   = { navController.popBackStack() },
-                onJoined = { navController.navigate(Route.Chat) }
+                onBack          = { navController.popBackStack() },
+                onJoined        = {
+                    navController.navigate(Route.Chat) {
+                        popUpTo(Route.ChatList) { inclusive = false }
+                    }
+                },
+                isHostRunning   = HostRuntime.isRunning(),
+                hostedRoomName  = RoomRepositoryImpl.currentRoomName
             )
         }
     }
