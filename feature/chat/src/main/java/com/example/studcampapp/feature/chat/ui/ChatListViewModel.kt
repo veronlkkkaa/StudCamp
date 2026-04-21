@@ -20,7 +20,8 @@ class ChatListViewModel(
     private val userRepository: UserRepository = UserRepositoryImpl
 ) : ViewModel() {
 
-    val rooms get() = roomRepository.rooms
+    val rooms get() = roomRepository.activeRooms
+    val isCheckingRooms get() = roomRepository.isCheckingRooms
     val currentUser get() = userRepository.currentUser
     val localAvatarUri get() = userRepository.localAvatarUri
 
@@ -28,6 +29,10 @@ class ChatListViewModel(
         private set
     var connectError by mutableStateOf<String?>(null)
         private set
+
+    fun refreshRooms() {
+        viewModelScope.launch { roomRepository.refreshActiveRooms() }
+    }
 
     fun reconnect(room: SavedRoom, onSuccess: () -> Unit) {
         if (connectingId != null) return

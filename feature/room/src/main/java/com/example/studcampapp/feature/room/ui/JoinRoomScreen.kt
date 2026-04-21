@@ -1,5 +1,7 @@
 package com.example.studcampapp.feature.room.ui
 
+import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -22,6 +24,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.studcampapp.feature.room.ui.RoomViewModel
 import com.example.studcampapp.ui.theme.*
 
+@RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun JoinRoomScreen(
     onBack: () -> Unit,
@@ -237,6 +240,7 @@ private fun textFieldColors(appColors: AppColors) = OutlinedTextFieldDefaults.co
     cursorColor = appColors.accent
 )
 
+@RequiresApi(Build.VERSION_CODES.O)
 @androidx.compose.ui.tooling.preview.Preview(showBackground = true)
 @androidx.compose.runtime.Composable
 private fun JoinRoomScreenPreview() {
