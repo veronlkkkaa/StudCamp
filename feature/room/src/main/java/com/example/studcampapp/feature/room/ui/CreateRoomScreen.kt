@@ -19,6 +19,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.studcampapp.data.repository.impl.UserRepositoryImpl
 import com.example.studcampapp.feature.room.ui.RoomViewModel
+import com.example.studcampapp.network.HostConnectionConfig
+import com.example.studcampapp.network.NetworkEndpointResolver
 import com.example.studcampapp.ui.theme.*
 
 @RequiresApi(Build.VERSION_CODES.O)
@@ -32,6 +34,7 @@ fun CreateRoomScreen(
     val appColors = LocalAppColors.current
     var roomName by remember { mutableStateOf("") }
     val nickname = UserRepositoryImpl.currentUser?.login ?: ""
+    val hostIp = remember { NetworkEndpointResolver.resolveHostIp() }
 
     LaunchedEffect(viewModel.navigateToChat) {
         if (viewModel.navigateToChat) {
@@ -106,7 +109,7 @@ fun CreateRoomScreen(
                     if (roomName.isBlank()) return@Button
                     val safeRoomName = roomName.trim()
                     onStartHost(safeRoomName)
-                    viewModel.join("127.0.0.1", 8080, nickname, safeRoomName)
+                    viewModel.join(hostIp, HostConnectionConfig.DEFAULT_PORT, nickname, safeRoomName)
                 },
                 enabled = !viewModel.isLoading && roomName.isNotBlank(),
                 modifier = Modifier
