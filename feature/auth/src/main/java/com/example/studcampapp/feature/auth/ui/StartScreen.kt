@@ -6,7 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -26,11 +26,13 @@ import com.example.studcampapp.ui.theme.InterFontFamily
 
 @Composable
 fun StartScreen(
-    onGuestLogin: () -> Unit,
+    onGuestLogin: (String) -> Unit,
     onAuthLogin: () -> Unit,
     onRegister: () -> Unit = {}
 ) {
     val appColors = DarkAppColors
+
+    var showNicknameDialog by remember { mutableStateOf(false) }
 
     val stars = listOf(
         Offset(0.05f, 0.03f), Offset(0.15f, 0.08f), Offset(0.28f, 0.05f),
@@ -51,6 +53,16 @@ fun StartScreen(
         Offset(0.86f, 0.83f), Offset(0.97f, 0.76f), Offset(0.20f, 0.93f),
         Offset(0.50f, 0.95f), Offset(0.72f, 0.97f)
     )
+
+    if (showNicknameDialog) {
+        NicknameDialog(
+            onConfirm = { nickname ->
+                showNicknameDialog = false
+                onGuestLogin(nickname)
+            },
+            onDismiss = { showNicknameDialog = false }
+        )
+    }
 
     Box(
         modifier = Modifier
@@ -147,7 +159,7 @@ fun StartScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             OutlinedButton(
-                onClick = onGuestLogin,
+                onClick = { showNicknameDialog = true },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
@@ -187,4 +199,66 @@ fun StartScreen(
             }
         }
     }
+}
+
+@Composable
+private fun NicknameDialog(onConfirm: (String) -> Unit, onDismiss: () -> Unit) {
+    var nickname by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = "Придумай ник",
+                fontFamily = InterFontFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = 18.sp
+            )
+        },
+        text = {
+            Column {
+                Text(
+                    text = "Он будет виден другим в чатах",
+                    fontFamily = InterFontFamily,
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 12.dp)
+                )
+                OutlinedTextField(
+                    value = nickname,
+                    onValueChange = { nickname = it; error = false },
+                    label = { Text("Твой ник", fontFamily = InterFontFamily) },
+                    isError = error,
+                    supportingText = if (error) {
+                        { Text("Ник не может быть пустым", fontFamily = InterFontFamily, fontSize = 12.sp) }
+                    } else null,
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = Purple,
+                        unfocusedBorderColor = Purple.copy(alpha = 0.4f),
+                        cursorColor = Purple
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    val trimmed = nickname.trim()
+                    if (trimmed.isBlank()) { error = true; return@TextButton }
+                    onConfirm(trimmed)
+                }
+            ) {
+                Text("Продолжить", fontFamily = InterFontFamily, color = Purple, fontWeight = FontWeight.SemiBold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Отмена", fontFamily = InterFontFamily)
+            }
+        }
+    )
 }

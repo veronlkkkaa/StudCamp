@@ -2,6 +2,8 @@ package com.example.studcampapp.data.repository.impl
 
 import android.content.Context
 import android.net.Uri
+import android.os.Build
+import androidx.annotation.RequiresApi
 import com.example.studcampapp.data.repository.ChatRepository
 import com.example.studcampapp.model.ChatMessage
 import com.example.studcampapp.model.FileInfo
@@ -16,14 +18,18 @@ object ChatRepositoryImpl : ChatRepository {
     override val connectionError: String? get() = ChatClient.connectionError
     override val uploadProgress: Float? get() = ChatClient.uploadProgress
     override val baseUrl: String get() = ChatClient.baseUrl
+    override val currentRoomName: String get() = ChatClient.currentRoomName
+    override val currentRoomId: String get() = ChatClient.currentRoomId
 
     override suspend fun join(ip: String, port: Int, login: String): Result<Unit> =
         ChatClient.join(ip, port, login)
 
+    @RequiresApi(Build.VERSION_CODES.O)
     override fun connect() = ChatClient.connect()
 
     override fun disconnect() = ChatClient.disconnect()
 
+    @RequiresApi(Build.VERSION_CODES.O)
     override fun sendMessage(text: String, fileInfo: FileInfo?) =
         ChatClient.sendMessage(text, fileInfo)
 
@@ -35,4 +41,6 @@ object ChatRepositoryImpl : ChatRepository {
         ChatClient.downloadFile(context, fileInfo)
 
     override fun getAuthHeader(): String? = ChatClient.getAuthHeader()
+
+    override suspend fun renameRoom(newName: String): Result<Unit> = ChatClient.renameRoom(newName)
 }

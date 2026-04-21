@@ -1,5 +1,7 @@
 package com.example.studcampapp.feature.room.ui
 
+import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -19,6 +21,7 @@ import com.example.studcampapp.data.repository.impl.UserRepositoryImpl
 import com.example.studcampapp.feature.room.ui.RoomViewModel
 import com.example.studcampapp.ui.theme.*
 
+@RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun CreateRoomScreen(
     onBack: () -> Unit,
@@ -28,7 +31,7 @@ fun CreateRoomScreen(
 ) {
     val appColors = LocalAppColors.current
     var roomName by remember { mutableStateOf("") }
-    var nickname by remember { mutableStateOf(UserRepositoryImpl.currentUser?.login ?: "") }
+    val nickname = UserRepositoryImpl.currentUser?.login ?: ""
 
     LaunchedEffect(viewModel.navigateToChat) {
         if (viewModel.navigateToChat) {
@@ -60,7 +63,7 @@ fun CreateRoomScreen(
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = "Придумай название и свой ник",
+                text = "Придумай название для комнаты",
                 fontSize = 14.sp,
                 fontFamily = InterFontFamily,
                 color = appColors.textSecondary
@@ -73,26 +76,6 @@ fun CreateRoomScreen(
                 onValueChange = { roomName = it },
                 label = {
                     Text("Название комнаты", fontFamily = InterFontFamily, color = appColors.textSecondary)
-                },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = Purple,
-                    unfocusedBorderColor = Purple.copy(alpha = 0.4f),
-                    focusedTextColor = appColors.textPrimary,
-                    unfocusedTextColor = appColors.textPrimary,
-                    cursorColor = appColors.accent
-                ),
-                singleLine = true
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            OutlinedTextField(
-                value = nickname,
-                onValueChange = { nickname = it },
-                label = {
-                    Text("Твой ник", fontFamily = InterFontFamily, color = appColors.textSecondary)
                 },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
@@ -122,9 +105,8 @@ fun CreateRoomScreen(
                 onClick = {
                     if (roomName.isBlank()) return@Button
                     val safeRoomName = roomName.trim()
-                    val safeNickname = nickname.trim()
                     onStartHost(safeRoomName)
-                    viewModel.join("127.0.0.1", 8080, safeNickname, safeRoomName)
+                    viewModel.join("127.0.0.1", 8080, nickname, safeRoomName)
                 },
                 enabled = !viewModel.isLoading && roomName.isNotBlank(),
                 modifier = Modifier
@@ -174,6 +156,7 @@ fun CreateRoomScreen(
     }
 }
 
+@RequiresApi(Build.VERSION_CODES.O)
 @androidx.compose.ui.tooling.preview.Preview(showBackground = true)
 @androidx.compose.runtime.Composable
 private fun CreateRoomScreenPreview() {

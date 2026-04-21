@@ -12,6 +12,7 @@ import com.example.studcampapp.data.repository.impl.ChatRepositoryImpl
 import com.example.studcampapp.data.repository.impl.RoomRepositoryImpl
 import com.example.studcampapp.data.repository.impl.UserRepositoryImpl
 import com.example.studcampapp.model.SavedRoom
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class ChatListViewModel(
@@ -20,7 +21,8 @@ class ChatListViewModel(
     private val userRepository: UserRepository = UserRepositoryImpl
 ) : ViewModel() {
 
-    val rooms get() = roomRepository.rooms
+    val rooms get() = roomRepository.activeRooms
+    val isCheckingRooms get() = roomRepository.isCheckingRooms
     val currentUser get() = userRepository.currentUser
     val localAvatarUri get() = userRepository.localAvatarUri
 
@@ -29,23 +31,39 @@ class ChatListViewModel(
     var connectError by mutableStateOf<String?>(null)
         private set
 
+    fun refreshRooms() {
+        viewModelScope.launch { roomRepository.refreshActiveRooms() }
+    }
+
     fun reconnect(room: SavedRoom, onSuccess: () -> Unit) {
         if (connectingId != null) return
         connectError = null
         connectingId = room.id
         viewModelScope.launch {
-            chatRepository.join(room.serverIp, room.serverPort, room.myNickname)
-                .onSuccess {
-                    roomRepository.setRoomName(room.name)
-                    roomRepository.saveRoom(room.copy(lastVisited = System.currentTimeMillis()))
-                    chatRepository.connect()
-                    connectingId = null
-                    onSuccess()
+            chatRepository.disconnect()
+            var joined = false
+            var lastError = ""
+            repeat(6) {
+                if (joined) return@repeat
+                val result = chatRepository.join(room.serverIp, room.serverPort, room.myNickname)
+                if (result.isSuccess) {
+                    joined = true
+                } else {
+                    lastError = result.exceptionOrNull()?.message ?: ""
+                    delay(400L)
                 }
-                .onFailure { e ->
-                    connectError = "Не удалось подключиться: ${e.message}"
-                    connectingId = null
-                }
+            }
+            if (!joined) {
+                connectError = "Не удалось подключиться: $lastError"
+                connectingId = null
+                return@launch
+            }
+            val serverName = chatRepository.currentRoomName.ifBlank { room.name }
+            roomRepository.setRoomName(serverName)
+            roomRepository.saveRoom(room.copy(name = serverName, lastVisited = System.currentTimeMillis()))
+            chatRepository.connect()
+            connectingId = null
+            onSuccess()
         }
     }
 }

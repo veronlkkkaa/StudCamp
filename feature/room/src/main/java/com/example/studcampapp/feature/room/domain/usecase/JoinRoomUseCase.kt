@@ -21,17 +21,18 @@ class JoinRoomUseCase(
         roomName: String
     ): Result<Unit> {
         var lastResult: Result<Unit> = Result.failure(IllegalStateException("No attempts made"))
-        repeat(MAX_ATTEMPTS) { attempt ->
+        for (attempt in 0 until MAX_ATTEMPTS) {
             lastResult = chatRepository.join(ip, port, nickname)
-            if (lastResult.isSuccess) return@repeat
+            if (lastResult.isSuccess) break
             if (attempt < MAX_ATTEMPTS - 1) delay(RETRY_DELAY_MS)
         }
         return lastResult.onSuccess {
-            roomRepository.setRoomName(roomName)
+            val serverName = chatRepository.currentRoomName.ifBlank { roomName }
+            roomRepository.setRoomName(serverName)
             roomRepository.saveRoom(
                 SavedRoom(
                     id = "$ip:$port",
-                    name = roomName,
+                    name = serverName,
                     serverIp = ip,
                     serverPort = port,
                     myNickname = nickname,

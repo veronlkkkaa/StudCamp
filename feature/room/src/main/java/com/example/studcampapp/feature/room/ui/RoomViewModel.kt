@@ -41,9 +41,26 @@ class RoomViewModel(
                     navigateToChat = true
                 }
                 .onFailure { e ->
-                    error = e.message
+                    error = mapErrorToRussian(e)
                     isLoading = false
                 }
+        }
+    }
+
+    private fun mapErrorToRussian(e: Throwable): String {
+        val msg = e.message ?: ""
+        return when {
+            msg.contains("already in use", ignoreCase = true) ||
+            msg.contains("already taken", ignoreCase = true) -> "Этот ник уже занят, выберите другой"
+            e is java.net.ConnectException ||
+            msg.contains("Connection refused", ignoreCase = true) ||
+            msg.contains("No route to host", ignoreCase = true) -> "Не удалось подключиться к серверу"
+            e is java.net.SocketTimeoutException ||
+            msg.contains("timed out", ignoreCase = true) ||
+            msg.contains("timeout", ignoreCase = true) -> "Время подключения истекло"
+            e is java.net.UnknownHostException ||
+            msg.contains("UnknownHost", ignoreCase = true) -> "Неверный адрес сервера"
+            else -> "Не удалось подключиться к комнате"
         }
     }
 }

@@ -26,6 +26,7 @@ import com.example.studcampapp.ui.theme.*
 fun EditProfileScreen(onBack: () -> Unit, viewModel: ProfileViewModel = viewModel()) {
     val appColors = LocalAppColors.current
     val user = viewModel.currentUser ?: return
+    val isGuest = viewModel.isGuest
 
     var username by remember { mutableStateOf(user.login) }
     var phone by remember { mutableStateOf(user.phone ?: "") }
@@ -91,19 +92,21 @@ fun EditProfileScreen(onBack: () -> Unit, viewModel: ProfileViewModel = viewMode
                 singleLine = true
             )
 
-            Spacer(modifier = Modifier.height(12.dp))
+            if (!isGuest) {
+                Spacer(modifier = Modifier.height(12.dp))
 
-            OutlinedTextField(
-                value = phone,
-                onValueChange = { phone = it },
-                label = { Text("Номер телефона", fontFamily = InterFontFamily) },
-                placeholder = { Text("+7 999 999 99 99", fontFamily = InterFontFamily, color = appColors.textSecondary.copy(alpha = 0.5f)) },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                modifier = Modifier.fillMaxWidth(),
-                shape = fieldShape,
-                colors = fieldColors,
-                singleLine = true
-            )
+                OutlinedTextField(
+                    value = phone,
+                    onValueChange = { phone = it },
+                    label = { Text("Номер телефона", fontFamily = InterFontFamily) },
+                    placeholder = { Text("+7 999 999 99 99", fontFamily = InterFontFamily, color = appColors.textSecondary.copy(alpha = 0.5f)) },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = fieldShape,
+                    colors = fieldColors,
+                    singleLine = true
+                )
+            }
 
             Spacer(modifier = Modifier.height(32.dp))
 
@@ -113,7 +116,10 @@ fun EditProfileScreen(onBack: () -> Unit, viewModel: ProfileViewModel = viewMode
                         usernameError = "Никнейм не может быть пустым"
                         return@Button
                     }
-                    viewModel.updateProfile(login = username.trim(), phone = phone.trim())
+                    viewModel.updateProfile(
+                        login = username.trim(),
+                        phone = if (isGuest) "" else phone.trim()
+                    )
                     onBack()
                 },
                 modifier = Modifier.fillMaxWidth().height(56.dp),

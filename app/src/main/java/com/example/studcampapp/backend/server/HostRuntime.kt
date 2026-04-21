@@ -4,6 +4,7 @@ import android.content.Context
 import com.example.studcampapp.backend.file.FileStore
 import com.example.studcampapp.backend.session.SessionStore
 import java.io.File
+import java.util.UUID
 
 object HostRuntime {
     private val sessionStore = SessionStore()
@@ -13,6 +14,8 @@ object HostRuntime {
     fun start(context: Context, roomName: String = "StudCamp Room") {
         if (hostServer != null) return
 
+        val roomId = UUID.randomUUID().toString()
+        sessionStore.setInitialRoomState(roomName, roomId)
         val fileStore = FileStore(File(context.cacheDir, "host-files"))
         val nsdPublisher = NsdPublisher(context.applicationContext)
         hostServer = HostServer(
