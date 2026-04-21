@@ -59,6 +59,10 @@ object ChatClient {
         private set
     var isHostClosed by mutableStateOf(false)
         private set
+    var currentRoomName by mutableStateOf("")
+        private set
+    var currentRoomId: String = ""
+        private set
 
     private var sessionId: String? = null
     private var serverIp: String = ""
@@ -107,7 +111,9 @@ object ChatClient {
         val response: JoinResponse = httpResponse.body()
         sessionId = response.sessionId
         myUser = response.user
+        currentRoomId = response.state.id
         withContext(Dispatchers.Main) {
+            currentRoomName = response.state.name
             messages.clear()
             messages.addAll(response.state.messages)
             participants.clear()
@@ -204,13 +210,28 @@ object ChatClient {
         return dm.enqueue(request)
     }
 
+    suspend fun renameRoom(newName: String): Result<Unit> = runCatching {
+        val sid = sessionId ?: throw IllegalStateException("Not connected")
+        val response = httpClient.post("http://$serverIp:$serverPort/room/rename") {
+            header(HttpHeaders.ContentType, "application/json")
+            header(HttpHeaders.Authorization, "Session $sid")
+            setBody(mapOf("name" to newName))
+        }
+        if (response.status.value !in 200..299) {
+            val errorMap = runCatching { response.body<Map<String, String>>() }.getOrNull()
+            throw Exception(errorMap?.get("error") ?: "HTTP ${response.status.value}")
+        }
+    }
+
     fun disconnect() {
         connectJob?.cancel()
         connectJob = null
         sessionId = null
         myUser = null
+        currentRoomId = ""
         tempIdCounter = 0
         scope.launch(Dispatchers.Main) {
+            currentRoomName = ""
             messages.clear()
             participants.clear()
             connectionError = null
@@ -264,6 +285,9 @@ object ChatClient {
                         isSystem = true
                     ))
                 }
+            }
+            is WsServerEvent.RoomRenamed -> {
+                currentRoomName = event.name
             }
             is WsServerEvent.HostClosed -> {
                 isHostClosed = true

@@ -11,8 +11,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
-import java.net.HttpURLConnection
-import java.net.URL
+import java.net.InetSocketAddress
+import java.net.Socket
 
 object RoomRepositoryImpl : RoomRepository {
     override val currentRoomName: String get() = RoomStore.currentRoom.name
@@ -25,6 +25,11 @@ object RoomRepositoryImpl : RoomRepository {
 
     override val activeRooms: List<SavedRoom>
         get() = rooms.filter { it.id in reachableIds }
+
+    override fun clearAllRooms() {
+        RoomHistoryStore.clear()
+        reachableIds = emptySet()
+    }
 
     override fun setRoomName(name: String) = RoomStore.setRoomName(name)
 
@@ -54,10 +59,8 @@ object RoomRepositoryImpl : RoomRepository {
 
     private suspend fun isReachable(ip: String, port: Int): Boolean = withContext(Dispatchers.IO) {
         runCatching {
-            val conn = URL("http://$ip:$port/health").openConnection() as HttpURLConnection
-            conn.connectTimeout = 2000
-            conn.readTimeout = 2000
-            conn.responseCode == 200
+            Socket().use { it.connect(InetSocketAddress(ip, port), 2000) }
+            true
         }.getOrDefault(false)
     }
 }

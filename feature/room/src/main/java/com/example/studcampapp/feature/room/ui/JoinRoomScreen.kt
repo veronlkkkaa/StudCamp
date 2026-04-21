@@ -5,8 +5,6 @@ import androidx.annotation.RequiresApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -21,6 +19,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.studcampapp.data.repository.impl.UserRepositoryImpl
 import com.example.studcampapp.feature.room.ui.RoomViewModel
 import com.example.studcampapp.ui.theme.*
 
@@ -29,13 +28,17 @@ import com.example.studcampapp.ui.theme.*
 fun JoinRoomScreen(
     onBack: () -> Unit,
     onJoined: () -> Unit,
+    isHostRunning: Boolean = false,
+    hostedRoomName: String = "",
     viewModel: RoomViewModel = viewModel()
 ) {
     val appColors = LocalAppColors.current
     val context = LocalContext.current
     var ip by remember { mutableStateOf("") }
-    var nickname by remember { mutableStateOf("") }
+    var selectedRoomName by remember { mutableStateOf("") }
+    val nickname = UserRepositoryImpl.currentUser?.login ?: ""
     val discoveredRooms = viewModel.discoveredRooms
+        .filter { !(isHostRunning && it.name == hostedRoomName) }
 
     LaunchedEffect(Unit) { viewModel.startDiscovery(context) }
     DisposableEffect(Unit) { onDispose { viewModel.stopDiscovery() } }
@@ -82,7 +85,7 @@ fun JoinRoomScreen(
             )
 
             Text(
-                text = "Введи IP-адрес сервера и свой ник",
+                text = "Введи IP-адрес сервера",
                 fontSize = 14.sp,
                 fontFamily = InterFontFamily,
                 color = appColors.textSecondary
@@ -118,7 +121,7 @@ fun JoinRoomScreen(
                             color = appColors.surface,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { ip = room.ip }
+                                .clickable { ip = room.ip; selectedRoomName = room.name }
                         ) {
                             Row(
                                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
@@ -161,18 +164,8 @@ fun JoinRoomScreen(
 
             OutlinedTextField(
                 value = ip,
-                onValueChange = { ip = it },
+                onValueChange = { ip = it; selectedRoomName = "" },
                 label = { Text("IP-адрес", fontFamily = InterFontFamily, color = appColors.textSecondary) },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                colors = textFieldColors(appColors),
-                singleLine = true
-            )
-
-            OutlinedTextField(
-                value = nickname,
-                onValueChange = { nickname = it },
-                label = { Text("Твой ник", fontFamily = InterFontFamily, color = appColors.textSecondary) },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
                 colors = textFieldColors(appColors),
@@ -194,7 +187,8 @@ fun JoinRoomScreen(
                 onClick = {
                     if (ip.isBlank()) return@Button
                     val trimmedIp = ip.trim()
-                    viewModel.join(trimmedIp, 8080, nickname.trim(), trimmedIp)
+                    val roomName = selectedRoomName.ifBlank { trimmedIp }
+                    viewModel.join(trimmedIp, 8080, nickname, roomName)
                 },
                 enabled = !viewModel.isLoading && ip.isNotBlank(),
                 modifier = Modifier

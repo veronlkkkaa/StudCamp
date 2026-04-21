@@ -6,6 +6,7 @@ import com.example.studcampapp.model.User
 interface UserRepository {
     val currentUser: User?
     val localAvatarUri: Uri?
+    val isGuest: Boolean
 
     fun login(user: User)
     fun logout()

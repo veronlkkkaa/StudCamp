@@ -15,6 +15,7 @@ import androidx.navigation.compose.rememberNavController
 import com.example.studcampapp.backend.server.HostForegroundService
 import com.example.studcampapp.backend.server.HostRuntime
 import com.example.studcampapp.data.UserStore
+import com.example.studcampapp.data.repository.impl.RoomRepositoryImpl
 import com.example.studcampapp.data.repository.impl.ChatRepositoryImpl
 import com.example.studcampapp.feature.auth.ui.AuthScreen
 import com.example.studcampapp.feature.auth.ui.RegisterScreen
@@ -49,8 +50,8 @@ fun NavGraph() {
     ) {
         composable<Route.Start> {
             StartScreen(
-                onGuestLogin = {
-                    UserStore.loginAsGuest()
+                onGuestLogin = { nickname ->
+                    UserStore.loginAsGuest(nickname)
                     navController.navigate(Route.ChatList) {
                         popUpTo(Route.Start) { inclusive = true }
                     }
@@ -95,7 +96,7 @@ fun NavGraph() {
             ChatScreen(
                 isHost     = isHost,
                 onLeave    = {
-                    ChatRepositoryImpl.disconnect()
+                    if (!isHost) ChatRepositoryImpl.disconnect()
                     navController.popBackStack()
                 },
                 onCloseRoom = {
@@ -115,6 +116,8 @@ fun NavGraph() {
             ProfileScreen(
                 onBack        = { navController.popBackStack() },
                 onLogout      = {
+                    HostForegroundService.stop(context)
+                    ChatRepositoryImpl.disconnect()
                     navController.navigate(Route.Start) {
                         popUpTo(Route.Start) { inclusive = false }
                         launchSingleTop = true
@@ -152,12 +155,14 @@ fun NavGraph() {
 
         composable<Route.JoinRoom> {
             JoinRoomScreen(
-                onBack   = { navController.popBackStack() },
-                onJoined = {
+                onBack          = { navController.popBackStack() },
+                onJoined        = {
                     navController.navigate(Route.Chat) {
                         popUpTo(Route.ChatList) { inclusive = false }
                     }
-                }
+                },
+                isHostRunning   = HostRuntime.isRunning(),
+                hostedRoomName  = RoomRepositoryImpl.currentRoomName
             )
         }
     }

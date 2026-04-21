@@ -47,7 +47,7 @@ class HostServer(
     private val sessionStore: SessionStore,
     private val fileStore: FileStore,
     private val nsdPublisher: NsdPublisher,
-    private val roomName: String,
+    private var roomName: String,
     private val host: String = "0.0.0.0",
     private val port: Int = 8080
 ) {
@@ -73,7 +73,14 @@ class HostServer(
                     sessionStore = sessionStore,
                     fileStore = fileStore,
                     connectionRegistry = connectionRegistry,
-                    wsJson = wsJson
+                    wsJson = wsJson,
+                    onRenameRoom = { newName ->
+                        roomName = newName
+                        sessionStore.setRoomName(newName)
+                        nsdPublisher.stop()
+                        nsdPublisher.start(serviceName = newName, port = port)
+                        connectionRegistry.broadcast(WsServerEvent.RoomRenamed(newName), wsJson)
+                    }
                 )
             }
         ).start(wait = false)
@@ -107,7 +114,8 @@ fun Application.hostModule(
         encodeDefaults = true
         explicitNulls = false
         classDiscriminator = "type"
-    }
+    },
+    onRenameRoom: suspend (String) -> Unit = {}
 ) {
     val maxFileSizeBytes = 100L * 1024L * 1024L
 
@@ -132,6 +140,25 @@ fun Application.hostModule(
         // Backward-compatible alias for older clients.
         post("/join") {
             handleJoinOrAuth(call, sessionStore)
+        }
+
+        post("/room/rename") {
+            val sessionId = extractSessionId(call)
+            if (sessionId.isNullOrBlank() || sessionStore.getUserBySessionId(sessionId) == null) {
+                call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid session"))
+                return@post
+            }
+            val body = runCatching { call.receive<Map<String, String>>() }.getOrElse {
+                call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid body"))
+                return@post
+            }
+            val newName = body["name"]?.trim()
+            if (newName.isNullOrBlank()) {
+                call.respond(HttpStatusCode.BadRequest, mapOf("error" to "name must not be blank"))
+                return@post
+            }
+            onRenameRoom(newName)
+            call.respond(HttpStatusCode.OK, mapOf("name" to newName))
         }
 
         post("/files/upload") {

@@ -9,6 +9,7 @@ import androidx.compose.runtime.setValue
 import com.example.studcampapp.model.User
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import java.util.UUID
 
 object UserStore {
     private val json = Json { ignoreUnknownKeys = true }
@@ -29,11 +30,16 @@ object UserStore {
         load()
     }
 
-    fun loginAsGuest() {
-        currentUser = null
+    fun loginAsGuest(nickname: String) {
+        val guestUser = User(id = UUID.randomUUID().toString(), login = nickname)
+        currentUser = guestUser
         isGuest = true
         localAvatarUri = null
-        prefs?.edit()?.putBoolean("is_guest", true)?.remove("user_json")?.apply()
+        val userJson = runCatching { json.encodeToString(guestUser) }.getOrNull()
+        prefs?.edit()
+            ?.putBoolean("is_guest", true)
+            ?.putString("user_json", userJson)
+            ?.apply()
     }
 
     fun login(user: User) {
@@ -59,7 +65,7 @@ object UserStore {
     }
 
     fun updateProfile(login: String, phone: String) {
-        val updated = currentUser?.copy(login = login, phone = phone) ?: return
+        val updated = currentUser?.copy(login = login, phone = phone.ifBlank { null }) ?: return
         currentUser = updated
         val userJson = runCatching { json.encodeToString(updated) }.getOrNull()
         prefs?.edit()?.putString("user_json", userJson)?.apply()
@@ -67,10 +73,7 @@ object UserStore {
 
     private fun load() {
         val prefs = prefs ?: return
-        if (prefs.getBoolean("is_guest", false)) {
-            isGuest = true
-            return
-        }
+        isGuest = prefs.getBoolean("is_guest", false)
         val userJson = prefs.getString("user_json", null) ?: return
         currentUser = runCatching { json.decodeFromString<User>(userJson) }.getOrNull()
     }

@@ -11,5 +11,6 @@ interface RoomRepository {
     fun setRoomName(name: String)
     fun saveRoom(room: SavedRoom)
     fun updateLastMessage(id: String, message: String)
+    fun clearAllRooms()
     suspend fun refreshActiveRooms()
 }

@@ -15,6 +15,7 @@ class ProfileViewModel(
 
     val currentUser get() = userRepository.currentUser
     val localAvatarUri get() = userRepository.localAvatarUri
+    val isGuest get() = userRepository.isGuest
 
     fun updateProfile(login: String, phone: String) =
         updateProfileUseCase.updateProfile(login, phone)
