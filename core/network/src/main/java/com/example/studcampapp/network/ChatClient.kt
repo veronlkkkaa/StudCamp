@@ -39,6 +39,8 @@ import io.ktor.serialization.kotlinx.json.json
 import io.ktor.websocket.Frame
 import io.ktor.websocket.readText
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -49,6 +51,8 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 
 object ChatClient {
+    private const val RECONNECT_DELAY_MS = 1_000L
+
     val messages = mutableStateListOf<ChatMessage>()
     val participants = mutableStateListOf<User>()
     var myUser by mutableStateOf<User?>(null)
@@ -66,7 +70,7 @@ object ChatClient {
 
     private var sessionId: String? = null
     private var serverIp: String = ""
-    private var serverPort: Int = 8080
+    private var serverPort: Int = HostConnectionConfig.DEFAULT_PORT
     private var connectJob: Job? = null
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val pendingEvents = Channel<WsClientEvent>(Channel.UNLIMITED)
@@ -126,24 +130,37 @@ object ChatClient {
         val sid = sessionId ?: return
         connectJob?.cancel()
         connectJob = scope.launch {
-            runCatching {
-                httpClient.webSocket("ws://$serverIp:$serverPort/ws?sessionId=$sid") {
-                    withContext(Dispatchers.Main) { connectionError = null }
-                    launch {
-                        pendingEvents.consumeEach { event ->
-                            send(Frame.Text(wsJson.encodeToString(WsClientEvent.serializer(), event)))
+            while (sessionId == sid && !isHostClosed) {
+                val wsResult = runCatching {
+                    httpClient.webSocket("ws://$serverIp:$serverPort/ws?sessionId=$sid") {
+                        withContext(Dispatchers.Main) { connectionError = null }
+                        launch {
+                            pendingEvents.consumeEach { event ->
+                                send(Frame.Text(wsJson.encodeToString(WsClientEvent.serializer(), event)))
+                            }
+                        }
+                        incoming.consumeEach { frame ->
+                            if (frame !is Frame.Text) return@consumeEach
+                            val event = runCatching {
+                                wsJson.decodeFromString(WsServerEvent.serializer(), frame.readText())
+                            }.getOrNull() ?: return@consumeEach
+                            withContext(Dispatchers.Main) { handleEvent(event) }
                         }
                     }
-                    incoming.consumeEach { frame ->
-                        if (frame !is Frame.Text) return@consumeEach
-                        val event = runCatching {
-                            wsJson.decodeFromString(WsServerEvent.serializer(), frame.readText())
-                        }.getOrNull() ?: return@consumeEach
-                        withContext(Dispatchers.Main) { handleEvent(event) }
-                    }
                 }
-            }.onFailure { e ->
-                withContext(Dispatchers.Main) { connectionError = mapNetworkError(e) }
+
+                if (sessionId != sid || isHostClosed) break
+
+                val wsError = wsResult.exceptionOrNull()
+                if (wsError is CancellationException) {
+                    break
+                }
+
+                withContext(Dispatchers.Main) {
+                    connectionError = mapNetworkError(wsError ?: IllegalStateException("WebSocket disconnected"))
+                }
+
+                delay(RECONNECT_DELAY_MS)
             }
         }
     }

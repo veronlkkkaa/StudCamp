@@ -40,6 +40,14 @@ class ChatListViewModel(
         connectError = null
         connectingId = room.id
         viewModelScope.launch {
+            val targetBaseUrl = "http://${room.serverIp}:${room.serverPort}"
+            val hasActiveSession = !chatRepository.getAuthHeader().isNullOrBlank()
+            if (hasActiveSession && chatRepository.baseUrl == targetBaseUrl) {
+                connectingId = null
+                onSuccess()
+                return@launch
+            }
+
             chatRepository.disconnect()
             var joined = false
             var lastError = ""
