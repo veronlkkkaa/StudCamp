@@ -18,6 +18,8 @@ object ChatRepositoryImpl : ChatRepository {
     override val connectionError: String? get() = ChatClient.connectionError
     override val uploadProgress: Float? get() = ChatClient.uploadProgress
     override val baseUrl: String get() = ChatClient.baseUrl
+    override val currentRoomName: String get() = ChatClient.currentRoomName
+    override val currentRoomId: String get() = ChatClient.currentRoomId
 
     override suspend fun join(ip: String, port: Int, login: String): Result<Unit> =
         ChatClient.join(ip, port, login)
@@ -39,4 +41,6 @@ object ChatRepositoryImpl : ChatRepository {
         ChatClient.downloadFile(context, fileInfo)
 
     override fun getAuthHeader(): String? = ChatClient.getAuthHeader()
+
+    override suspend fun renameRoom(newName: String): Result<Unit> = ChatClient.renameRoom(newName)
 }

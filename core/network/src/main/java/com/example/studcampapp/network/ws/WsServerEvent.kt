@@ -54,4 +54,8 @@ sealed class WsServerEvent {
     @Serializable
     @SerialName("host_closed")
     object HostClosed : WsServerEvent()
+
+    @Serializable
+    @SerialName("room_renamed")
+    data class RoomRenamed(val name: String) : WsServerEvent()
 }

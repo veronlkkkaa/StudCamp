@@ -14,6 +14,8 @@ interface ChatRepository {
     val connectionError: String?
     val uploadProgress: Float?
     val baseUrl: String
+    val currentRoomName: String
+    val currentRoomId: String
 
     suspend fun join(ip: String, port: Int, login: String): Result<Unit>
     fun connect()
@@ -22,4 +24,5 @@ interface ChatRepository {
     suspend fun uploadFile(context: Context, uri: Uri, fileName: String, mimeType: String): Result<FileInfo>
     fun downloadFile(context: Context, fileInfo: FileInfo): Long
     fun getAuthHeader(): String?
+    suspend fun renameRoom(newName: String): Result<Unit>
 }

@@ -24,6 +24,17 @@ class SessionStore {
     private val messages = ArrayDeque<ChatMessage>()
     private var nextMessageId = 1
     private var nextGuestNumber = 1
+    private var roomName: String = ""
+    private var roomId: String = ""
+
+    fun setInitialRoomState(name: String, id: String) {
+        roomName = name
+        roomId = id
+    }
+
+    suspend fun setRoomName(name: String) = mutex.withLock {
+        roomName = name
+    }
 
     suspend fun join(request: JoinRequest): JoinResponse = mutex.withLock {
         val login = request.login.trim().ifBlank { generateGuestLoginUnsafe() }
@@ -111,6 +122,8 @@ class SessionStore {
         messages.clear()
         nextMessageId = 1
         nextGuestNumber = 1
+        roomName = ""
+        roomId = ""
     }
 
     private fun ensureNicknameIsAvailableUnsafe(login: String) {
@@ -132,7 +145,9 @@ class SessionStore {
     private fun roomStateUnsafe(): RoomState {
         return RoomState(
             users = usersById.values.toList(),
-            messages = messages.toList()
+            messages = messages.toList(),
+            name = roomName,
+            id = roomId
         )
     }
 }

@@ -32,7 +32,7 @@ class ChatViewModel(
     val isHostClosed get() = chatRepository.isHostClosed
     val connectionError get() = chatRepository.connectionError
     val uploadProgress get() = chatRepository.uploadProgress
-    val roomName get() = roomRepository.currentRoomName
+    val roomName get() = chatRepository.currentRoomName
     val baseUrl get() = chatRepository.baseUrl
 
     fun sendMessage(text: String, fileInfo: FileInfo? = null) =
@@ -44,6 +44,12 @@ class ChatViewModel(
     fun disconnect() = disconnectUseCase()
 
     fun getAuthHeader(): String? = chatRepository.getAuthHeader()
+
+    fun renameRoom(newName: String) {
+        viewModelScope.launch {
+            chatRepository.renameRoom(newName)
+        }
+    }
 
     fun uploadAndSend(
         context: Context,
