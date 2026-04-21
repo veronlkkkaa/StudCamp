@@ -99,6 +99,7 @@ fun ChatScreen(
     val messages = viewModel.messages
     val myUserId = viewModel.myUser?.id
     val uploadProgress = viewModel.uploadProgress
+    val connectionError = viewModel.connectionError
 
     var inputText by remember { mutableStateOf("") }
     var pendingAttachment by remember { mutableStateOf<MessageAttachment?>(null) }
@@ -412,6 +413,18 @@ fun ChatScreen(
                     )
                 }
             }
+        }
+
+        if (!connectionError.isNullOrBlank()) {
+            Text(
+                text = connectionError,
+                color = MaterialTheme.colorScheme.error,
+                fontSize = 12.sp,
+                fontFamily = InterFontFamily,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp)
+            )
         }
 
         // Pending attachment / upload progress bar

@@ -3,6 +3,7 @@ package com.example.studcampapp.backend.server
 import com.example.studcampapp.backend.file.FileStore
 import com.example.studcampapp.backend.session.NicknameOccupiedException
 import com.example.studcampapp.backend.session.SessionStore
+import com.example.studcampapp.network.HostConnectionConfig
 import com.example.studcampapp.network.dto.JoinRequest
 import com.example.studcampapp.network.dto.UploadResponse
 import com.example.studcampapp.network.ws.WsClientEvent
@@ -49,7 +50,7 @@ class HostServer(
     private val nsdPublisher: NsdPublisher,
     private var roomName: String,
     private val host: String = "0.0.0.0",
-    private val port: Int = 8080
+    private val port: Int = HostConnectionConfig.DEFAULT_PORT
 ) {
     private var engine: ApplicationEngine? = null
     private val connectionRegistry = WsConnectionRegistry()
