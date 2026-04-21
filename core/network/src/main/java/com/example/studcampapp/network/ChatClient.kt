@@ -39,6 +39,7 @@ import io.ktor.serialization.kotlinx.json.json
 import io.ktor.websocket.Frame
 import io.ktor.websocket.readText
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -150,8 +151,13 @@ object ChatClient {
 
                 if (sessionId != sid || isHostClosed) break
 
+                val wsError = wsResult.exceptionOrNull()
+                if (wsError is CancellationException) {
+                    break
+                }
+
                 withContext(Dispatchers.Main) {
-                    connectionError = mapNetworkError(wsResult.exceptionOrNull() ?: IllegalStateException("WebSocket disconnected"))
+                    connectionError = mapNetworkError(wsError ?: IllegalStateException("WebSocket disconnected"))
                 }
 
                 delay(RECONNECT_DELAY_MS)
