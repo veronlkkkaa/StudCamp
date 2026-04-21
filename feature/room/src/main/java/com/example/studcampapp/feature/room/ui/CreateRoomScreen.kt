@@ -1,5 +1,7 @@
 package com.example.studcampapp.feature.room.ui
 
+import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -19,6 +21,7 @@ import com.example.studcampapp.data.repository.impl.UserRepositoryImpl
 import com.example.studcampapp.feature.room.ui.RoomViewModel
 import com.example.studcampapp.ui.theme.*
 
+@RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun CreateRoomScreen(
     onBack: () -> Unit,
@@ -174,6 +177,7 @@ fun CreateRoomScreen(
     }
 }
 
+@RequiresApi(Build.VERSION_CODES.O)
 @androidx.compose.ui.tooling.preview.Preview(showBackground = true)
 @androidx.compose.runtime.Composable
 private fun CreateRoomScreenPreview() {

@@ -1,5 +1,7 @@
 package com.example.studcampapp.feature.chat.ui
 
+import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -23,6 +25,7 @@ import com.example.studcampapp.feature.chat.ui.ChatListViewModel
 import com.example.studcampapp.model.SavedRoom
 import com.example.studcampapp.ui.theme.*
 
+@RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun ChatListScreen(
     onRoomConnected: () -> Unit,
@@ -30,8 +33,11 @@ fun ChatListScreen(
     onProfileClick: () -> Unit = {},
     viewModel: ChatListViewModel = viewModel()
 ) {
+    LaunchedEffect(Unit) { viewModel.refreshRooms() }
+
     val appColors = LocalAppColors.current
     val rooms = viewModel.rooms
+    val isCheckingRooms = viewModel.isCheckingRooms
     val connectingId = viewModel.connectingId
     val connectError = viewModel.connectError
 
@@ -132,14 +138,18 @@ fun ChatListScreen(
             )
         }
 
-        if (rooms.isEmpty()) {
+        if (isCheckingRooms) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = Purple)
+            }
+        } else if (rooms.isEmpty()) {
             Box(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
-                        text = "Нет сохранённых комнат",
+                        text = "Нет активных комнат",
                         fontSize = 16.sp,
                         fontFamily = InterFontFamily,
                         color = appColors.textSecondary,
@@ -241,6 +251,7 @@ fun RoomItem(
     }
 }
 
+@RequiresApi(Build.VERSION_CODES.O)
 @androidx.compose.ui.tooling.preview.Preview(showBackground = true)
 @androidx.compose.runtime.Composable
 private fun ChatListScreenPreview() {

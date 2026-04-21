@@ -85,7 +85,13 @@ private fun attachmentTypeFromName(fileName: String): AttachmentType {
 @RequiresApi(Build.VERSION_CODES.O)
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-fun ChatScreen(onLeave: () -> Unit, onRoomInfo: () -> Unit, viewModel: ChatViewModel = viewModel()) {
+fun ChatScreen(
+    onLeave: () -> Unit,
+    onRoomInfo: () -> Unit,
+    isHost: Boolean = false,
+    onCloseRoom: () -> Unit = {},
+    viewModel: ChatViewModel = viewModel()
+) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
@@ -295,7 +301,8 @@ fun ChatScreen(onLeave: () -> Unit, onRoomInfo: () -> Unit, viewModel: ChatViewM
             }
             TextButton(
                 onClick = onRoomInfo,
-                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
+                modifier = Modifier.weight(1f)
             ) {
                 Text(
                     text = viewModel.roomName,
@@ -311,6 +318,29 @@ fun ChatScreen(onLeave: () -> Unit, onRoomInfo: () -> Unit, viewModel: ChatViewM
                     tint = Purple,
                     modifier = Modifier.size(18.dp)
                 )
+            }
+            if (isHost) {
+                var showCloseDialog by remember { mutableStateOf(false) }
+                IconButton(onClick = { showCloseDialog = true }) {
+                    Icon(Icons.Default.Close, contentDescription = "Закрыть комнату", tint = Purple)
+                }
+                if (showCloseDialog) {
+                    AlertDialog(
+                        onDismissRequest = { showCloseDialog = false },
+                        title = { Text("Закрыть комнату?", fontFamily = InterFontFamily) },
+                        text = { Text("Все участники будут отключены.", fontFamily = InterFontFamily) },
+                        confirmButton = {
+                            TextButton(onClick = { showCloseDialog = false; onCloseRoom() }) {
+                                Text("Закрыть", color = MaterialTheme.colorScheme.error, fontFamily = InterFontFamily)
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { showCloseDialog = false }) {
+                                Text("Отмена", fontFamily = InterFontFamily)
+                            }
+                        }
+                    )
+                }
             }
         }
 
