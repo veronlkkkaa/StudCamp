@@ -96,7 +96,7 @@ fun NavGraph() {
             ChatScreen(
                 isHost     = isHost,
                 onLeave    = {
-                    if (!isHost) ChatRepositoryImpl.disconnect()
+                    // Back navigation should not reset chat session/state.
                     navController.popBackStack()
                 },
                 onCloseRoom = {
@@ -162,7 +162,7 @@ fun NavGraph() {
                     }
                 },
                 isHostRunning   = HostRuntime.isRunning(),
-                hostedRoomName  = RoomRepositoryImpl.currentRoomName
+                hostedRoomName  = ChatRepositoryImpl.currentRoomName
             )
         }
     }
