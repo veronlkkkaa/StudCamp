@@ -19,7 +19,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "StudcampApp"
+rootProject.name = "Lyra"
 include(":app")
 include(":core:model")
 include(":core:network")

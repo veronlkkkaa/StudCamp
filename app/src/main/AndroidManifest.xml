@@ -11,7 +11,7 @@
         android:maxSdkVersion="28" />
 
     <application
-        android:name=".StudcampApp"
+        android:name=".LyraApp"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
@@ -19,13 +19,13 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.StudcampApp"
+        android:theme="@style/Theme.Lyra"
         android:usesCleartextTraffic="true">
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:label="@string/app_name"
-            android:theme="@style/Theme.StudcampApp"
+            android:theme="@style/Theme.Lyra"
             android:enableOnBackInvokedCallback="true"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
