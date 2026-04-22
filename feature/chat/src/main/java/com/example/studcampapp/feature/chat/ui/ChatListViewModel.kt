@@ -43,6 +43,9 @@ class ChatListViewModel(
             val targetBaseUrl = "http://${room.serverIp}:${room.serverPort}"
             val hasActiveSession = !chatRepository.getAuthHeader().isNullOrBlank()
             if (hasActiveSession && chatRepository.baseUrl == targetBaseUrl) {
+                if (!chatRepository.isConnected) {
+                    chatRepository.connect()
+                }
                 connectingId = null
                 onSuccess()
                 return@launch
@@ -62,7 +65,12 @@ class ChatListViewModel(
                 }
             }
             if (!joined) {
-                connectError = "Не удалось подключиться: $lastError"
+                if (isRoomUnavailableError(lastError)) {
+                    roomRepository.removeRoom(room.id)
+                    connectError = "Комната больше не существует или была закрыта хостом"
+                } else {
+                    connectError = "Не удалось подключиться: $lastError"
+                }
                 connectingId = null
                 return@launch
             }
@@ -73,5 +81,16 @@ class ChatListViewModel(
             connectingId = null
             onSuccess()
         }
+    }
+
+    private fun isRoomUnavailableError(error: String): Boolean {
+        val msg = error.lowercase()
+        return msg.contains("connection refused") ||
+            msg.contains("no route to host") ||
+            msg.contains("timed out") ||
+            msg.contains("timeout") ||
+            msg.contains("unable to resolve host") ||
+            msg.contains("failed to connect") ||
+            msg.contains("not found")
     }
 }
