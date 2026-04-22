@@ -29,10 +29,12 @@ fun CreateRoomScreen(
     onBack: () -> Unit,
     onRoomCreated: () -> Unit,
     onStartHost: (String) -> Unit = {},
+    isHostRunning: Boolean = false,
     viewModel: RoomViewModel = viewModel()
 ) {
     val appColors = LocalAppColors.current
     var roomName by remember { mutableStateOf("") }
+    var localError by remember { mutableStateOf<String?>(null) }
     val nickname = UserRepositoryImpl.currentUser?.login ?: ""
     val hostIp = remember { NetworkEndpointResolver.resolveHostIp() }
 
@@ -76,7 +78,10 @@ fun CreateRoomScreen(
 
             OutlinedTextField(
                 value = roomName,
-                onValueChange = { roomName = it },
+                onValueChange = {
+                    roomName = it
+                    localError = null
+                },
                 label = {
                     Text("Название комнаты", fontFamily = InterFontFamily, color = appColors.textSecondary)
                 },
@@ -92,10 +97,11 @@ fun CreateRoomScreen(
                 singleLine = true
             )
 
-            if (viewModel.error != null) {
+            val errorText = localError ?: viewModel.error
+            if (errorText != null) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = viewModel.error!!,
+                    text = errorText,
                     color = MaterialTheme.colorScheme.error,
                     fontSize = 13.sp,
                     fontFamily = InterFontFamily
@@ -107,7 +113,12 @@ fun CreateRoomScreen(
             Button(
                 onClick = {
                     if (roomName.isBlank()) return@Button
+                    if (isHostRunning) {
+                        localError = "Нельзя создать вторую комнату, пока активна текущая"
+                        return@Button
+                    }
                     val safeRoomName = roomName.trim()
+                    localError = null
                     onStartHost(safeRoomName)
                     viewModel.join(hostIp, HostConnectionConfig.DEFAULT_PORT, nickname, safeRoomName)
                 },
