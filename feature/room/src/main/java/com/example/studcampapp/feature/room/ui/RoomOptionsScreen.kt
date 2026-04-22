@@ -7,6 +7,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -20,9 +24,11 @@ import com.example.studcampapp.ui.theme.*
 fun RoomOptionsScreen(
     onBack: () -> Unit,
     onCreateRoom: () -> Unit,
-    onJoinRoom: () -> Unit
+    onJoinRoom: () -> Unit,
+    isHostRunning: Boolean = false
 ) {
     val appColors = LocalAppColors.current
+    var localError by remember { mutableStateOf<String?>(null) }
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -69,7 +75,14 @@ fun RoomOptionsScreen(
             Spacer(modifier = Modifier.height(48.dp))
 
             Button(
-                onClick = onCreateRoom,
+                onClick = {
+                    if (isHostRunning) {
+                        localError = "Нельзя создать вторую комнату, пока активна текущая"
+                    } else {
+                        localError = null
+                        onCreateRoom()
+                    }
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
@@ -98,6 +111,16 @@ fun RoomOptionsScreen(
             }
 
             Spacer(modifier = Modifier.height(16.dp))
+
+            if (!localError.isNullOrBlank()) {
+                Text(
+                    text = localError ?: "",
+                    color = MaterialTheme.colorScheme.error,
+                    fontSize = 13.sp,
+                    fontFamily = InterFontFamily
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+            }
 
             OutlinedButton(
                 onClick = onJoinRoom,
