@@ -8,8 +8,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -23,11 +24,16 @@ import com.example.studcampapp.model.User
 import com.example.studcampapp.ui.theme.*
 
 @Composable
-fun RoomInfoScreen(onBack: () -> Unit, viewModel: ChatViewModel = viewModel()) {
+fun RoomInfoScreen(
+    onBack: () -> Unit,
+    isHost: Boolean = false,
+    viewModel: ChatViewModel = viewModel()
+) {
     val appColors = LocalAppColors.current
     val roomName = viewModel.roomName
     val participants = viewModel.participants
     val myUserId = viewModel.myUser?.id
+    var showRenameDialog by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -66,13 +72,25 @@ fun RoomInfoScreen(onBack: () -> Unit, viewModel: ChatViewModel = viewModel()) {
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(20.dp)) {
-                        Text(
-                            text = roomName,
-                            fontSize = 22.sp,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = InterFontFamily,
-                            color = appColors.textPrimary
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = roomName,
+                                fontSize = 22.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = InterFontFamily,
+                                color = appColors.textPrimary,
+                                modifier = Modifier.weight(1f)
+                            )
+                            if (isHost) {
+                                IconButton(onClick = { showRenameDialog = true }) {
+                                    Icon(
+                                        Icons.Default.Edit,
+                                        contentDescription = "Переименовать комнату",
+                                        tint = appColors.accent
+                                    )
+                                }
+                            }
+                        }
                         Spacer(Modifier.height(4.dp))
                         Text(
                             text = "Участников: ${participants.size}",
@@ -99,6 +117,42 @@ fun RoomInfoScreen(onBack: () -> Unit, viewModel: ChatViewModel = viewModel()) {
                 ParticipantItem(user = user, isMe = user.id == myUserId)
             }
         }
+    }
+
+    if (showRenameDialog) {
+        var newRoomName by remember { mutableStateOf(roomName) }
+        AlertDialog(
+            onDismissRequest = { showRenameDialog = false },
+            title = { Text("Переименовать комнату", fontFamily = InterFontFamily) },
+            text = {
+                OutlinedTextField(
+                    value = newRoomName,
+                    onValueChange = { newRoomName = it },
+                    label = { Text("Название", fontFamily = InterFontFamily) },
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = Purple,
+                        unfocusedBorderColor = Purple.copy(alpha = 0.4f),
+                        cursorColor = Purple
+                    )
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showRenameDialog = false
+                        if (newRoomName.isNotBlank()) viewModel.renameRoom(newRoomName.trim())
+                    }
+                ) {
+                    Text("Сохранить", color = Purple, fontFamily = InterFontFamily)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRenameDialog = false }) {
+                    Text("Отмена", fontFamily = InterFontFamily)
+                }
+            }
+        )
     }
 }
 
