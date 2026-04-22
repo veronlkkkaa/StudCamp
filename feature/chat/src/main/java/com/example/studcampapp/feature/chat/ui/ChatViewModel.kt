@@ -41,6 +41,9 @@ class ChatViewModel(
     fun downloadFile(context: Context, fileInfo: FileInfo): Long =
         downloadFileUseCase(context, fileInfo)
 
+    suspend fun downloadToCache(context: Context, fileInfo: FileInfo): Result<java.io.File> =
+        chatRepository.downloadToCache(context, fileInfo)
+
     fun disconnect() = disconnectUseCase()
 
     fun getAuthHeader(): String? = chatRepository.getAuthHeader()

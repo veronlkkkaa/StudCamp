@@ -40,6 +40,9 @@ object ChatRepositoryImpl : ChatRepository {
     override fun downloadFile(context: Context, fileInfo: FileInfo): Long =
         ChatClient.downloadFile(context, fileInfo)
 
+    override suspend fun downloadToCache(context: Context, fileInfo: FileInfo): Result<java.io.File> =
+        ChatClient.downloadToCache(context, fileInfo)
+
     override fun getAuthHeader(): String? = ChatClient.getAuthHeader()
 
     override suspend fun renameRoom(newName: String): Result<Unit> = ChatClient.renameRoom(newName)
