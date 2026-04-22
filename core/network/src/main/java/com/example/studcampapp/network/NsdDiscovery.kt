@@ -96,5 +96,5 @@ object NsdDiscovery {
         }
     }
 
-    const val SERVICE_TYPE = "_studcamp._tcp."
+    const val SERVICE_TYPE = "_lyra._tcp."
 }

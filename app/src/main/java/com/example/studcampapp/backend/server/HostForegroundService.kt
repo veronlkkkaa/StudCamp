@@ -45,7 +45,7 @@ class HostForegroundService : Service() {
     private fun buildNotification(roomName: String): Notification {
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle("StudCamp host is running")
+            .setContentTitle("Lyra host is running")
             .setContentText("Room: $roomName")
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
@@ -57,16 +57,16 @@ class HostForegroundService : Service() {
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val channel = NotificationChannel(
             CHANNEL_ID,
-            "StudCamp Host",
+            "Lyra Host",
             NotificationManager.IMPORTANCE_LOW
         )
         manager.createNotificationChannel(channel)
     }
 
     companion object {
-        private const val CHANNEL_ID = "studcamp_host_channel"
+        private const val CHANNEL_ID = "lyra_host_channel"
         private const val NOTIFICATION_ID = 1001
-        private const val DEFAULT_ROOM_NAME = "StudCamp Room"
+        private const val DEFAULT_ROOM_NAME = "Lyra Room"
 
         const val ACTION_START_HOST = "com.example.studcampapp.action.START_HOST"
         const val ACTION_STOP_HOST = "com.example.studcampapp.action.STOP_HOST"
