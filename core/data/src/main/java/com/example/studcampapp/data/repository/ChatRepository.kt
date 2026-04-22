@@ -23,6 +23,7 @@ interface ChatRepository {
     fun sendMessage(text: String, fileInfo: FileInfo? = null)
     suspend fun uploadFile(context: Context, uri: Uri, fileName: String, mimeType: String): Result<FileInfo>
     fun downloadFile(context: Context, fileInfo: FileInfo): Long
+    suspend fun downloadToCache(context: Context, fileInfo: FileInfo): Result<java.io.File>
     fun getAuthHeader(): String?
     suspend fun renameRoom(newName: String): Result<Unit>
 }
