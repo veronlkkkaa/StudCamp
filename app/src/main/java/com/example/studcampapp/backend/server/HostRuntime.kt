@@ -11,7 +11,7 @@ object HostRuntime {
     private var hostServer: HostServer? = null
 
     @Synchronized
-    fun start(context: Context, roomName: String = "StudCamp Room") {
+    fun start(context: Context, roomName: String = "Lyra Room") {
         if (hostServer != null) return
 
         val roomId = UUID.randomUUID().toString()
