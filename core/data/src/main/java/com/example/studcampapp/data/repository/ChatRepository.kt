@@ -11,6 +11,7 @@ interface ChatRepository {
     val participants: List<User>
     val myUser: User?
     val isHostClosed: Boolean
+    val isConnected: Boolean
     val connectionError: String?
     val uploadProgress: Float?
     val baseUrl: String
