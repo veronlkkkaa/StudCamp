@@ -138,7 +138,8 @@ fun NavGraph() {
             RoomOptionsScreen(
                 onBack       = { navController.popBackStack() },
                 onCreateRoom = { navController.navigate(Route.CreateRoom) },
-                onJoinRoom   = { navController.navigate(Route.JoinRoom) }
+                onJoinRoom   = { navController.navigate(Route.JoinRoom) },
+                isHostRunning = HostRuntime.isRunning()
             )
         }
 
@@ -152,7 +153,8 @@ fun NavGraph() {
                 },
                 onStartHost = { roomName ->
                     HostForegroundService.start(context, roomName)
-                }
+                },
+                isHostRunning = HostRuntime.isRunning()
             )
         }
 
