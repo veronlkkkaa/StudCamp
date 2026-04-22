@@ -105,7 +105,7 @@ fun StartScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             Text(
-                text = "StudcampApp",
+                text = "Lyra",
                 fontSize = 44.sp,
                 fontWeight = FontWeight.Bold,
                 fontFamily = InterFontFamily,

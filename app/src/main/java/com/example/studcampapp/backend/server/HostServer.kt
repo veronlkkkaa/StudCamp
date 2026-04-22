@@ -108,7 +108,7 @@ class HostServer(
 
 fun Application.hostModule(
     sessionStore: SessionStore,
-    fileStore: FileStore = FileStore(File(System.getProperty("java.io.tmpdir"), "studcamp-files-${UUID.randomUUID()}")),
+    fileStore: FileStore = FileStore(File(System.getProperty("java.io.tmpdir"), "lyra-files-${UUID.randomUUID()}")),
     connectionRegistry: WsConnectionRegistry = WsConnectionRegistry(),
     wsJson: Json = Json {
         ignoreUnknownKeys = true
