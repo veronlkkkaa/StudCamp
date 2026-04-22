@@ -15,6 +15,7 @@ object ChatRepositoryImpl : ChatRepository {
     override val participants: List<User> get() = ChatClient.participants
     override val myUser: User? get() = ChatClient.myUser
     override val isHostClosed: Boolean get() = ChatClient.isHostClosed
+    override val isConnected: Boolean get() = ChatClient.isConnected
     override val connectionError: String? get() = ChatClient.connectionError
     override val uploadProgress: Float? get() = ChatClient.uploadProgress
     override val baseUrl: String get() = ChatClient.baseUrl

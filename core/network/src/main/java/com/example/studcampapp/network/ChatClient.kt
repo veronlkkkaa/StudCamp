@@ -64,6 +64,8 @@ object ChatClient {
         private set
     var isHostClosed by mutableStateOf(false)
         private set
+    var isConnected by mutableStateOf(false)
+        private set
     var currentRoomName by mutableStateOf("")
         private set
     var currentRoomId: String = ""
@@ -134,7 +136,7 @@ object ChatClient {
             while (sessionId == sid && !isHostClosed) {
                 val wsResult = runCatching {
                     httpClient.webSocket("ws://$serverIp:$serverPort/ws?sessionId=$sid") {
-                        withContext(Dispatchers.Main) { connectionError = null }
+                        withContext(Dispatchers.Main) { connectionError = null; isConnected = true }
                         launch {
                             pendingEvents.consumeEach { event ->
                                 send(Frame.Text(wsJson.encodeToString(WsClientEvent.serializer(), event)))
@@ -149,6 +151,8 @@ object ChatClient {
                         }
                     }
                 }
+
+                withContext(Dispatchers.Main) { isConnected = false }
 
                 if (sessionId != sid || isHostClosed) break
 
@@ -277,6 +281,7 @@ object ChatClient {
             participants.clear()
             connectionError = null
             isHostClosed = false
+            isConnected = false
         }
     }
 

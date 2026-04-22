@@ -21,8 +21,14 @@ object RoomHistoryStore {
     }
 
     fun saveRoom(room: SavedRoom) {
-        val idx = _rooms.indexOfFirst { it.id == room.id }
-        if (idx >= 0) _rooms[idx] = room else _rooms.add(0, room)
+        val idx = _rooms.indexOfFirst {
+            it.id == room.id || (it.serverIp == room.serverIp && it.serverPort == room.serverPort)
+        }
+        if (idx >= 0) {
+            _rooms[idx] = room
+        } else {
+            _rooms.add(0, room)
+        }
         persist()
     }
 
@@ -37,6 +43,11 @@ object RoomHistoryStore {
         }
     }
 
+    fun removeRoom(id: String) {
+        val removed = _rooms.removeAll { it.id == id }
+        if (removed) persist()
+    }
+
     fun clear() {
         _rooms.clear()
         prefs?.edit()?.remove("rooms")?.apply()
@@ -45,8 +56,11 @@ object RoomHistoryStore {
     private fun load() {
         val str = prefs?.getString("rooms", null) ?: return
         val list = runCatching { json.decodeFromString<List<SavedRoom>>(str) }.getOrNull() ?: return
+        val deduped = list
+            .sortedByDescending { it.lastVisited }
+            .distinctBy { "${it.serverIp}:${it.serverPort}" }
         _rooms.clear()
-        _rooms.addAll(list.sortedByDescending { it.lastVisited })
+        _rooms.addAll(deduped)
     }
 
     private fun persist() {
