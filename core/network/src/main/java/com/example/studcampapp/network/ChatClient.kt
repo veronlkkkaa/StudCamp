@@ -264,6 +264,14 @@ object ChatClient {
         }
     }
 
+    fun updateLogin(login: String) {
+        val current = myUser ?: return
+        val updated = current.copy(login = login)
+        myUser = updated
+        val idx = participants.indexOfFirst { it.id == current.id }
+        if (idx >= 0) participants[idx] = updated
+    }
+
     fun disconnect() {
         connectJob?.cancel()
         connectJob = null

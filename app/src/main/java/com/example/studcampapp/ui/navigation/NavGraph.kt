@@ -109,7 +109,10 @@ fun NavGraph() {
         }
 
         composable<Route.RoomInfo> {
-            RoomInfoScreen(onBack = { navController.popBackStack() })
+            RoomInfoScreen(
+                onBack = { navController.popBackStack() },
+                isHost = HostRuntime.isRunning()
+            )
         }
 
         composable<Route.Profile> {

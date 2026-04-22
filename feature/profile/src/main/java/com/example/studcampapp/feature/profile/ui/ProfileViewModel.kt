@@ -2,6 +2,7 @@ package com.example.studcampapp.feature.profile.ui
 
 import android.net.Uri
 import androidx.lifecycle.ViewModel
+import com.example.studcampapp.data.RoomHistoryStore
 import com.example.studcampapp.data.repository.UserRepository
 import com.example.studcampapp.data.repository.impl.UserRepositoryImpl
 import com.example.studcampapp.feature.profile.domain.usecase.LogoutUseCase
@@ -16,6 +17,7 @@ class ProfileViewModel(
     val currentUser get() = userRepository.currentUser
     val localAvatarUri get() = userRepository.localAvatarUri
     val isGuest get() = userRepository.isGuest
+    val hasRooms get() = RoomHistoryStore.rooms.isNotEmpty()
 
     fun updateProfile(login: String, phone: String) =
         updateProfileUseCase.updateProfile(login, phone)
