@@ -30,6 +30,7 @@ import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.client.plugins.websocket.webSocket
 import io.ktor.client.request.forms.MultiPartFormDataContent
 import io.ktor.client.request.forms.formData
+import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
@@ -216,15 +217,38 @@ object ChatClient {
     }
 
     fun downloadFile(context: Context, fileInfo: FileInfo): Long {
-        val url = if (fileInfo.fileUrl.startsWith("http")) fileInfo.fileUrl
-                  else "$baseUrl${fileInfo.fileUrl}"
+        val url = when {
+            fileInfo.fileUrl.startsWith("http") -> fileInfo.fileUrl
+            fileInfo.fileUrl.startsWith("/") -> "$baseUrl${fileInfo.fileUrl}"
+            else -> "$baseUrl/${fileInfo.fileUrl}"
+        }
         val request = DownloadManager.Request(url.toUri())
             .setTitle(fileInfo.fileName)
+            .setDescription("Скачивание файла")
             .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
             .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileInfo.fileName)
+            .setAllowedOverMetered(true)
+            .setAllowedOverRoaming(true)
         sessionId?.let { request.addRequestHeader("Authorization", "Session $it") }
         val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
         return dm.enqueue(request)
+    }
+
+    suspend fun downloadToCache(context: Context, fileInfo: FileInfo): Result<java.io.File> = runCatching {
+        val url = when {
+            fileInfo.fileUrl.startsWith("http") -> fileInfo.fileUrl
+            fileInfo.fileUrl.startsWith("/") -> "$baseUrl${fileInfo.fileUrl}"
+            else -> "$baseUrl/${fileInfo.fileUrl}"
+        }
+        val cacheFile = java.io.File(context.cacheDir, fileInfo.fileName)
+        if (cacheFile.exists() && cacheFile.length() > 0) return@runCatching cacheFile
+        withContext(Dispatchers.IO) {
+            val bytes: ByteArray = httpClient.get(url) {
+                sessionId?.let { header(HttpHeaders.Authorization, "Session $it") }
+            }.body()
+            cacheFile.writeBytes(bytes)
+        }
+        cacheFile
     }
 
     suspend fun renameRoom(newName: String): Result<Unit> = runCatching {

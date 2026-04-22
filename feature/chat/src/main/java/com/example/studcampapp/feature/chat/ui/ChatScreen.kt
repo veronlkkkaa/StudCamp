@@ -17,7 +17,11 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.scaleIn
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.WindowInsets
@@ -51,6 +55,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.content.Intent
+import android.widget.MediaController
+import android.widget.VideoView
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.core.content.FileProvider
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -61,6 +73,29 @@ import com.example.studcampapp.ui.theme.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.LocalDateTime
+
+private fun getMimeTypeFromFileName(fileName: String): String {
+    val ext = fileName.substringAfterLast('.', "").lowercase()
+    return when (ext) {
+        "pdf"  -> "application/pdf"
+        "doc"  -> "application/msword"
+        "docx" -> "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        "xls"  -> "application/vnd.ms-excel"
+        "xlsx" -> "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        "ppt"  -> "application/vnd.ms-powerpoint"
+        "pptx" -> "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        "txt"  -> "text/plain"
+        "zip"  -> "application/zip"
+        else   -> "application/octet-stream"
+    }
+}
+
+private data class MediaViewState(
+    val type: AttachmentType,
+    val localUri: android.net.Uri?,
+    val remoteUrl: String?,
+    val authHeader: String?
+)
 
 private fun getFileNameFromUri(context: Context, uri: android.net.Uri): String {
     if (uri.scheme == "file") return uri.lastPathSegment ?: "Файл"
@@ -104,6 +139,7 @@ fun ChatScreen(
     var inputText by remember { mutableStateOf("") }
     var pendingAttachment by remember { mutableStateOf<MessageAttachment?>(null) }
     var pickerActive by remember { mutableStateOf(false) }
+    var mediaPreview by remember { mutableStateOf<MediaViewState?>(null) }
 
     BackHandler(enabled = pickerActive) { pickerActive = false }
     val downloadProgress = remember { mutableStateMapOf<Int, Float>() }
@@ -221,12 +257,13 @@ fun ChatScreen(
 
     fun stopRecording(send: Boolean) {
         val file = recordingFile
+        val duration = recordingSeconds
         audioRecorder?.runCatching { stop(); release() }
         audioRecorder = null
         isRecording = false
         recordingSeconds = 0
         recordingFile = null
-        if (send && file != null && file.exists() && file.length() > 0) {
+        if (send && duration >= 1 && file != null && file.exists() && file.length() > 0) {
             pendingAttachment = MessageAttachment(
                 uri = android.net.Uri.fromFile(file),
                 type = AttachmentType.Audio,
@@ -409,6 +446,29 @@ fun ChatScreen(
                         authHeader = viewModel.getAuthHeader(),
                         onDownload = {
                             message.fileInfo?.let { requestDownload(message.id, it) }
+                        },
+                        onMediaClick = { type, localUri, remoteUrl ->
+                            mediaPreview = MediaViewState(type, localUri, remoteUrl, viewModel.getAuthHeader())
+                        },
+                        onDocumentOpen = { fileInfo ->
+                            coroutineScope.launch {
+                                viewModel.downloadToCache(context, fileInfo)
+                                    .onSuccess { file ->
+                                        val uri = FileProvider.getUriForFile(
+                                            context, "${context.packageName}.fileprovider", file
+                                        )
+                                        val intent = Intent(Intent.ACTION_VIEW).apply {
+                                            setDataAndType(uri, getMimeTypeFromFileName(file.name))
+                                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                        }
+                                        runCatching {
+                                            context.startActivity(
+                                                Intent.createChooser(intent, "Открыть с помощью")
+                                            )
+                                        }
+                                    }
+                            }
                         }
                     )
                 }
@@ -565,20 +625,19 @@ fun ChatScreen(
                         modifier = Modifier
                             .size(48.dp)
                             .pointerInput(Unit) {
-                                detectTapGestures(
-                                    onPress = {
-                                        val granted = context.checkSelfPermission(
-                                            Manifest.permission.RECORD_AUDIO
-                                        ) == PackageManager.PERMISSION_GRANTED
-                                        if (!granted) {
-                                            audioPermLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                                            return@detectTapGestures
-                                        }
-                                        startRecording()
-                                        tryAwaitRelease()
-                                        stopRecording(send = true)
+                                awaitEachGesture {
+                                    awaitFirstDown(requireUnconsumed = false)
+                                    val granted = context.checkSelfPermission(
+                                        Manifest.permission.RECORD_AUDIO
+                                    ) == PackageManager.PERMISSION_GRANTED
+                                    if (!granted) {
+                                        audioPermLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                                        return@awaitEachGesture
                                     }
-                                )
+                                    startRecording()
+                                    waitForUpOrCancellation()
+                                    stopRecording(send = true)
+                                }
                             },
                         contentAlignment = Alignment.Center
                     ) {
@@ -600,6 +659,24 @@ fun ChatScreen(
             viewModel.disconnect()
             onLeave()
         })
+    }
+
+    mediaPreview?.let { preview ->
+        when (preview.type) {
+            AttachmentType.Image -> FullscreenImageViewer(
+                localUri = preview.localUri,
+                remoteUrl = preview.remoteUrl,
+                authHeader = preview.authHeader,
+                onDismiss = { mediaPreview = null }
+            )
+            AttachmentType.Video -> FullscreenVideoPlayer(
+                localUri = preview.localUri,
+                remoteUrl = preview.remoteUrl,
+                authHeader = preview.authHeader,
+                onDismiss = { mediaPreview = null }
+            )
+            else -> {}
+        }
     }
 
     } // end Box
@@ -723,7 +800,9 @@ fun MessageBubble(
     baseUrl: String = "",
     authHeader: String? = null,
     onLongPress: () -> Unit = {},
-    onDownload: () -> Unit = {}
+    onDownload: () -> Unit = {},
+    onMediaClick: (type: AttachmentType, localUri: android.net.Uri?, remoteUrl: String?) -> Unit = { _, _, _ -> },
+    onDocumentOpen: suspend (FileInfo) -> Unit = {}
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -763,7 +842,9 @@ fun MessageBubble(
                     downloadProgress = downloadProgress,
                     baseUrl = baseUrl,
                     authHeader = authHeader,
-                    onDownload = onDownload
+                    onDownload = onDownload,
+                    onMediaClick = onMediaClick,
+                    onDocumentOpen = onDocumentOpen
                 )
                 if (message.text.isNotBlank()) Spacer(Modifier.height(4.dp))
             }
@@ -803,9 +884,13 @@ private fun AttachmentView(
     downloadProgress: Float? = null,
     baseUrl: String = "",
     authHeader: String? = null,
-    onDownload: () -> Unit = {}
+    onDownload: () -> Unit = {},
+    onMediaClick: (type: AttachmentType, localUri: android.net.Uri?, remoteUrl: String?) -> Unit = { _, _, _ -> },
+    onDocumentOpen: suspend (FileInfo) -> Unit = {}
 ) {
     val context = LocalContext.current
+    val docScope = rememberCoroutineScope()
+    var isDocLoading by remember { mutableStateOf(false) }
     val overlayBg = if (isMe) Color.White.copy(alpha = 0.15f) else Purple.copy(alpha = 0.08f)
     val iconTint = if (isMe) Color.White else Purple
     val textColor = if (isMe) Color.White else LocalAppColors.current.chatBubbleOtherText
@@ -815,7 +900,11 @@ private fun AttachmentView(
     val canDownload = fileInfo != null && downloadProgress == null
 
     val remoteUrl: String? = fileInfo?.let {
-        if (it.fileUrl.startsWith("http")) it.fileUrl else "$baseUrl${it.fileUrl}"
+        when {
+            it.fileUrl.startsWith("http") -> it.fileUrl
+            it.fileUrl.startsWith("/") -> "$baseUrl${it.fileUrl}"
+            else -> "$baseUrl/${it.fileUrl}"
+        }
     }
 
     when (displayType) {
@@ -827,7 +916,11 @@ private fun AttachmentView(
                     .apply { authHeader?.let { h -> addHeader("Authorization", h) } }
                     .build()
             }
-            Box {
+            Box(
+                modifier = Modifier.clickable {
+                    onMediaClick(AttachmentType.Image, attachment?.uri, remoteUrl)
+                }
+            ) {
                 AsyncImage(
                     model = imageRequest,
                     contentDescription = null,
@@ -878,11 +971,25 @@ private fun AttachmentView(
 
         AttachmentType.Video, AttachmentType.Document -> {
             val icon = if (displayType == AttachmentType.Video) Icons.Default.PlayArrow else Icons.Default.Description
+            val isVideo = displayType == AttachmentType.Video
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(8.dp))
                     .background(overlayBg)
+                    .then(when {
+                        isVideo -> Modifier.clickable {
+                            onMediaClick(AttachmentType.Video, attachment?.uri, remoteUrl)
+                        }
+                        fileInfo != null -> Modifier.clickable(enabled = !isDocLoading) {
+                            docScope.launch {
+                                isDocLoading = true
+                                onDocumentOpen(fileInfo)
+                                isDocLoading = false
+                            }
+                        }
+                        else -> Modifier
+                    })
                     .padding(8.dp)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -899,17 +1006,25 @@ private fun AttachmentView(
                     )
                     if (fileInfo != null) {
                         Spacer(Modifier.width(4.dp))
-                        IconButton(
-                            onClick = onDownload,
-                            modifier = Modifier.size(32.dp),
-                            enabled = canDownload
-                        ) {
-                            Icon(
-                                if (downloadProgress != null) Icons.Default.Downloading else Icons.Default.Download,
-                                contentDescription = "Скачать",
-                                tint = iconTint,
-                                modifier = Modifier.size(20.dp)
+                        if (!isVideo && isDocLoading) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(28.dp).padding(4.dp),
+                                color = iconTint,
+                                strokeWidth = 2.dp
                             )
+                        } else {
+                            IconButton(
+                                onClick = onDownload,
+                                modifier = Modifier.size(32.dp),
+                                enabled = canDownload
+                            ) {
+                                Icon(
+                                    if (downloadProgress != null) Icons.Default.Downloading else Icons.Default.Download,
+                                    contentDescription = "Скачать",
+                                    tint = iconTint,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
                         }
                     }
                 }
@@ -1033,6 +1148,107 @@ private fun AudioPlayerView(
         if (fileInfo != null) {
             IconButton(onClick = onDownload, modifier = Modifier.size(32.dp)) {
                 Icon(Icons.Default.Download, null, tint = iconTint, modifier = Modifier.size(18.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun FullscreenImageViewer(
+    localUri: android.net.Uri?,
+    remoteUrl: String?,
+    authHeader: String?,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnClickOutside = true)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black)
+                .clickable { onDismiss() },
+            contentAlignment = Alignment.Center
+        ) {
+            val imageRequest = remember(localUri, remoteUrl, authHeader) {
+                ImageRequest.Builder(context)
+                    .data(localUri ?: remoteUrl)
+                    .crossfade(true)
+                    .apply { authHeader?.let { h -> addHeader("Authorization", h) } }
+                    .build()
+            }
+            AsyncImage(
+                model = imageRequest,
+                contentDescription = null,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = {})
+            )
+            IconButton(
+                onClick = onDismiss,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(8.dp)
+            ) {
+                Icon(
+                    Icons.Default.Close, null,
+                    tint = Color.White,
+                    modifier = Modifier.size(28.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun FullscreenVideoPlayer(
+    localUri: android.net.Uri?,
+    remoteUrl: String?,
+    authHeader: String?,
+    onDismiss: () -> Unit
+) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black),
+            contentAlignment = Alignment.Center
+        ) {
+            AndroidView(
+                factory = { ctx ->
+                    VideoView(ctx).apply {
+                        val controller = MediaController(ctx)
+                        controller.setAnchorView(this)
+                        setMediaController(controller)
+                        val headers = authHeader?.let { mapOf("Authorization" to it) } ?: emptyMap()
+                        when {
+                            localUri != null -> setVideoURI(localUri)
+                            remoteUrl != null -> setVideoURI(android.net.Uri.parse(remoteUrl), headers)
+                        }
+                        setOnPreparedListener { it.start() }
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(16f / 9f)
+            )
+            IconButton(
+                onClick = onDismiss,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(8.dp)
+            ) {
+                Icon(
+                    Icons.Default.Close, null,
+                    tint = Color.White,
+                    modifier = Modifier.size(28.dp)
+                )
             }
         }
     }
