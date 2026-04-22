@@ -5,6 +5,7 @@ import com.example.studcampapp.data.RoomHistoryStore
 import com.example.studcampapp.data.UserStore
 import com.example.studcampapp.data.repository.UserRepository
 import com.example.studcampapp.model.User
+import com.example.studcampapp.network.ChatClient
 
 object UserRepositoryImpl : UserRepository {
     override val currentUser: User? get() = UserStore.currentUser
@@ -17,5 +18,8 @@ object UserRepositoryImpl : UserRepository {
         RoomHistoryStore.clear()
     }
     override fun updateAvatar(uri: Uri) = UserStore.updateAvatar(uri)
-    override fun updateProfile(login: String, phone: String) = UserStore.updateProfile(login, phone)
+    override fun updateProfile(login: String, phone: String) {
+        UserStore.updateProfile(login, phone)
+        ChatClient.updateLogin(login)
+    }
 }
