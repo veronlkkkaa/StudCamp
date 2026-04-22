@@ -5,7 +5,6 @@ import android.app.DownloadManager
 import android.content.Context
 import android.content.pm.PackageManager
 import android.media.MediaPlayer
-import android.media.MediaRecorder
 import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -18,10 +17,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.scaleIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.WindowInsets
@@ -140,6 +136,7 @@ fun ChatScreen(
     var pendingAttachment by remember { mutableStateOf<MessageAttachment?>(null) }
     var pickerActive by remember { mutableStateOf(false) }
     var mediaPreview by remember { mutableStateOf<MediaViewState?>(null) }
+    var videoLoading by remember { mutableStateOf(false) }
 
     BackHandler(enabled = pickerActive) { pickerActive = false }
     val downloadProgress = remember { mutableStateMapOf<Int, Float>() }
@@ -213,70 +210,6 @@ fun ChatScreen(
             else -> AttachmentType.Document
         }
         pendingAttachment = MessageAttachment(uri, type, getFileNameFromUri(context, uri))
-    }
-
-    // Voice recording state
-    var isRecording by remember { mutableStateOf(false) }
-    var recordingSeconds by remember { mutableStateOf(0) }
-    var audioRecorder by remember { mutableStateOf<MediaRecorder?>(null) }
-    var recordingFile by remember { mutableStateOf<java.io.File?>(null) }
-
-    val audioPermLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { /* next press will start recording */ }
-
-    DisposableEffect(Unit) {
-        onDispose {
-            audioRecorder?.runCatching { stop(); release() }
-            audioRecorder = null
-        }
-    }
-
-    fun startRecording() {
-        val file = java.io.File(context.cacheDir, "voice_${System.currentTimeMillis()}.m4a")
-        recordingFile = file
-        try {
-            val mr = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) MediaRecorder(context)
-                     else @Suppress("DEPRECATION") MediaRecorder()
-            mr.apply {
-                setAudioSource(MediaRecorder.AudioSource.MIC)
-                setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-                setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-                setAudioSamplingRate(44100)
-                setAudioEncodingBitRate(128000)
-                setOutputFile(file.absolutePath)
-                prepare()
-                start()
-            }
-            audioRecorder = mr
-            isRecording = true
-        } catch (_: Exception) {
-            recordingFile = null
-        }
-    }
-
-    fun stopRecording(send: Boolean) {
-        val file = recordingFile
-        val duration = recordingSeconds
-        audioRecorder?.runCatching { stop(); release() }
-        audioRecorder = null
-        isRecording = false
-        recordingSeconds = 0
-        recordingFile = null
-        if (send && duration >= 1 && file != null && file.exists() && file.length() > 0) {
-            pendingAttachment = MessageAttachment(
-                uri = android.net.Uri.fromFile(file),
-                type = AttachmentType.Audio,
-                fileName = file.name
-            )
-        }
-    }
-
-    LaunchedEffect(isRecording) {
-        if (isRecording) {
-            recordingSeconds = 0
-            while (true) { delay(1000L); recordingSeconds++ }
-        }
     }
 
     LaunchedEffect(messages.size) {
@@ -358,47 +291,7 @@ fun ChatScreen(
                 )
             }
             if (isHost) {
-                var showRenameDialog by remember { mutableStateOf(false) }
                 var showCloseDialog by remember { mutableStateOf(false) }
-
-                IconButton(onClick = { showRenameDialog = true }) {
-                    Icon(Icons.Default.Edit, contentDescription = "Переименовать комнату", tint = Purple)
-                }
-                if (showRenameDialog) {
-                    var newRoomName by remember { mutableStateOf(viewModel.roomName) }
-                    AlertDialog(
-                        onDismissRequest = { showRenameDialog = false },
-                        title = { Text("Переименовать комнату", fontFamily = InterFontFamily) },
-                        text = {
-                            OutlinedTextField(
-                                value = newRoomName,
-                                onValueChange = { newRoomName = it },
-                                label = { Text("Название", fontFamily = InterFontFamily) },
-                                singleLine = true,
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedBorderColor = Purple,
-                                    unfocusedBorderColor = Purple.copy(alpha = 0.4f),
-                                    cursorColor = Purple
-                                )
-                            )
-                        },
-                        confirmButton = {
-                            TextButton(
-                                onClick = {
-                                    showRenameDialog = false
-                                    if (newRoomName.isNotBlank()) viewModel.renameRoom(newRoomName.trim())
-                                }
-                            ) {
-                                Text("Сохранить", color = Purple, fontFamily = InterFontFamily)
-                            }
-                        },
-                        dismissButton = {
-                            TextButton(onClick = { showRenameDialog = false }) {
-                                Text("Отмена", fontFamily = InterFontFamily)
-                            }
-                        }
-                    )
-                }
 
                 IconButton(onClick = { showCloseDialog = true }) {
                     Icon(Icons.Default.Close, contentDescription = "Закрыть комнату", tint = Purple)
@@ -447,8 +340,23 @@ fun ChatScreen(
                         onDownload = {
                             message.fileInfo?.let { requestDownload(message.id, it) }
                         },
-                        onMediaClick = { type, localUri, remoteUrl ->
-                            mediaPreview = MediaViewState(type, localUri, remoteUrl, viewModel.getAuthHeader())
+                        onMediaClick = { type, localUri, remoteUrl, fileInfo ->
+                            if (type == AttachmentType.Video && localUri == null && fileInfo != null) {
+                                coroutineScope.launch {
+                                    videoLoading = true
+                                    viewModel.downloadToCache(context, fileInfo)
+                                        .onSuccess { file ->
+                                            mediaPreview = MediaViewState(
+                                                AttachmentType.Video,
+                                                android.net.Uri.fromFile(file),
+                                                null, null
+                                            )
+                                        }
+                                    videoLoading = false
+                                }
+                            } else {
+                                mediaPreview = MediaViewState(type, localUri, remoteUrl, viewModel.getAuthHeader())
+                            }
                         },
                         onDocumentOpen = { fileInfo ->
                             coroutineScope.launch {
@@ -542,108 +450,48 @@ fun ChatScreen(
             }
         }
 
-        if (isRecording) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(surfaceColor)
-                    .padding(horizontal = 12.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(surfaceColor)
+                .padding(horizontal = 4.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(
+                onClick = {
+                    pickerActive = true
+                    filePickerLauncher.launch(arrayOf("image/*", "video/*", "application/*", "audio/*"))
+                },
+                enabled = uploadProgress == null
             ) {
-                IconButton(onClick = { stopRecording(send = false) }) {
-                    Icon(Icons.Default.Delete, "Отмена", tint = subtitleColor)
-                }
-                Spacer(Modifier.width(8.dp))
-                Box(
-                    modifier = Modifier
-                        .size(10.dp)
-                        .clip(CircleShape)
-                        .background(Color.Red)
-                )
-                Spacer(Modifier.width(8.dp))
-                val mins = recordingSeconds / 60
-                val secs = recordingSeconds % 60
-                Text(
-                    text = "$mins:${secs.toString().padStart(2, '0')}",
-                    fontSize = 16.sp,
-                    fontFamily = InterFontFamily,
-                    color = textColor,
-                    fontWeight = FontWeight.Medium,
-                    modifier = Modifier.weight(1f)
-                )
-                Text(
-                    text = "Отпустите для отправки",
-                    fontSize = 12.sp,
-                    fontFamily = InterFontFamily,
-                    color = subtitleColor
-                )
+                Icon(Icons.Default.AttachFile, "Прикрепить файл", tint = Purple)
             }
-        } else {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(surfaceColor)
-                    .padding(horizontal = 4.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
+            OutlinedTextField(
+                value = inputText,
+                onValueChange = { inputText = it },
+                placeholder = {
+                    Text("Сообщение...", fontFamily = InterFontFamily, color = subtitleColor)
+                },
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(24.dp),
+                singleLine = true,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = Purple,
+                    unfocusedBorderColor = Color(0xFFCCCCCC),
+                    focusedTextColor = textColor,
+                    unfocusedTextColor = textColor,
+                    cursorColor = Purple
+                ),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                keyboardActions = KeyboardActions(onSend = { sendMessage() })
+            )
+            Spacer(Modifier.width(4.dp))
+            val canSend = (inputText.isNotBlank() || pendingAttachment != null) && uploadProgress == null
+            IconButton(
+                onClick = { if (canSend) sendMessage() },
+                enabled = canSend
             ) {
-                IconButton(
-                    onClick = {
-                        pickerActive = true
-                        filePickerLauncher.launch(arrayOf("image/*", "video/*", "application/*", "audio/*"))
-                    },
-                    enabled = uploadProgress == null
-                ) {
-                    Icon(Icons.Default.AttachFile, "Прикрепить файл", tint = Purple)
-                }
-                OutlinedTextField(
-                    value = inputText,
-                    onValueChange = { inputText = it },
-                    placeholder = {
-                        Text("Сообщение...", fontFamily = InterFontFamily, color = subtitleColor)
-                    },
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(24.dp),
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Purple,
-                        unfocusedBorderColor = Color(0xFFCCCCCC),
-                        focusedTextColor = textColor,
-                        unfocusedTextColor = textColor,
-                        cursorColor = Purple
-                    ),
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                    keyboardActions = KeyboardActions(onSend = { sendMessage() })
-                )
-                Spacer(Modifier.width(4.dp))
-                val canSend = (inputText.isNotBlank() || pendingAttachment != null) && uploadProgress == null
-                if (canSend) {
-                    IconButton(onClick = { sendMessage() }) {
-                        Icon(Icons.AutoMirrored.Filled.Send, "Отправить", tint = Purple)
-                    }
-                } else {
-                    Box(
-                        modifier = Modifier
-                            .size(48.dp)
-                            .pointerInput(Unit) {
-                                awaitEachGesture {
-                                    awaitFirstDown(requireUnconsumed = false)
-                                    val granted = context.checkSelfPermission(
-                                        Manifest.permission.RECORD_AUDIO
-                                    ) == PackageManager.PERMISSION_GRANTED
-                                    if (!granted) {
-                                        audioPermLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                                        return@awaitEachGesture
-                                    }
-                                    startRecording()
-                                    waitForUpOrCancellation()
-                                    stopRecording(send = true)
-                                }
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Default.Mic, "Голосовое", tint = Purple)
-                    }
-                }
+                Icon(Icons.AutoMirrored.Filled.Send, "Отправить", tint = if (canSend) Purple else Purple.copy(alpha = 0.3f))
             }
         }
     } // end Column
@@ -659,6 +507,15 @@ fun ChatScreen(
             viewModel.disconnect()
             onLeave()
         })
+    }
+
+    if (videoLoading) {
+        Box(
+            modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.6f)),
+            contentAlignment = Alignment.Center
+        ) {
+            CircularProgressIndicator(color = Color.White)
+        }
     }
 
     mediaPreview?.let { preview ->
@@ -801,7 +658,7 @@ fun MessageBubble(
     authHeader: String? = null,
     onLongPress: () -> Unit = {},
     onDownload: () -> Unit = {},
-    onMediaClick: (type: AttachmentType, localUri: android.net.Uri?, remoteUrl: String?) -> Unit = { _, _, _ -> },
+    onMediaClick: (type: AttachmentType, localUri: android.net.Uri?, remoteUrl: String?, fileInfo: FileInfo?) -> Unit = { _, _, _, _ -> },
     onDocumentOpen: suspend (FileInfo) -> Unit = {}
 ) {
     Row(
@@ -885,7 +742,7 @@ private fun AttachmentView(
     baseUrl: String = "",
     authHeader: String? = null,
     onDownload: () -> Unit = {},
-    onMediaClick: (type: AttachmentType, localUri: android.net.Uri?, remoteUrl: String?) -> Unit = { _, _, _ -> },
+    onMediaClick: (type: AttachmentType, localUri: android.net.Uri?, remoteUrl: String?, fileInfo: FileInfo?) -> Unit = { _, _, _, _ -> },
     onDocumentOpen: suspend (FileInfo) -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -918,7 +775,7 @@ private fun AttachmentView(
             }
             Box(
                 modifier = Modifier.clickable {
-                    onMediaClick(AttachmentType.Image, attachment?.uri, remoteUrl)
+                    onMediaClick(AttachmentType.Image, attachment?.uri, remoteUrl, fileInfo)
                 }
             ) {
                 AsyncImage(
@@ -979,7 +836,7 @@ private fun AttachmentView(
                     .background(overlayBg)
                     .then(when {
                         isVideo -> Modifier.clickable {
-                            onMediaClick(AttachmentType.Video, attachment?.uri, remoteUrl)
+                            onMediaClick(AttachmentType.Video, attachment?.uri, remoteUrl, fileInfo)
                         }
                         fileInfo != null -> Modifier.clickable(enabled = !isDocLoading) {
                             docScope.launch {
@@ -1210,6 +1067,7 @@ private fun FullscreenVideoPlayer(
     authHeader: String?,
     onDismiss: () -> Unit
 ) {
+    var isError by remember { mutableStateOf(false) }
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
@@ -1220,24 +1078,25 @@ private fun FullscreenVideoPlayer(
                 .background(Color.Black),
             contentAlignment = Alignment.Center
         ) {
-            AndroidView(
-                factory = { ctx ->
-                    VideoView(ctx).apply {
-                        val controller = MediaController(ctx)
-                        controller.setAnchorView(this)
-                        setMediaController(controller)
-                        val headers = authHeader?.let { mapOf("Authorization" to it) } ?: emptyMap()
-                        when {
-                            localUri != null -> setVideoURI(localUri)
-                            remoteUrl != null -> setVideoURI(android.net.Uri.parse(remoteUrl), headers)
+            if (isError) {
+                Text("Не удалось воспроизвести видео", color = Color.White, fontFamily = InterFontFamily)
+            } else {
+                AndroidView(
+                    factory = { ctx ->
+                        VideoView(ctx).apply {
+                            val controller = MediaController(ctx)
+                            controller.setAnchorView(this)
+                            setMediaController(controller)
+                            setOnErrorListener { _, _, _ -> isError = true; true }
+                            localUri?.let { setVideoURI(it) }
+                            setOnPreparedListener { it.start() }
                         }
-                        setOnPreparedListener { it.start() }
-                    }
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(16f / 9f)
-            )
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(16f / 9f)
+                )
+            }
             IconButton(
                 onClick = onDismiss,
                 modifier = Modifier

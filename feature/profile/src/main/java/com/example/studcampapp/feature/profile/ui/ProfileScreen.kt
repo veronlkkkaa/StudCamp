@@ -19,6 +19,10 @@ import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -45,6 +49,7 @@ fun ProfileScreen(
     val user = viewModel.currentUser
     val isGuest = viewModel.isGuest
     val localAvatarUri = viewModel.localAvatarUri
+    var showLogoutConfirm by remember { mutableStateOf(false) }
 
     val avatarPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -233,8 +238,12 @@ fun ProfileScreen(
 
             Button(
                 onClick = {
-                    viewModel.logout()
-                    onLogout()
+                    if (viewModel.hasRooms) {
+                        showLogoutConfirm = true
+                    } else {
+                        viewModel.logout()
+                        onLogout()
+                    }
                 },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -261,6 +270,35 @@ fun ProfileScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
         }
+    }
+
+    if (showLogoutConfirm) {
+        AlertDialog(
+            onDismissRequest = { showLogoutConfirm = false },
+            title = { Text("Выйти из аккаунта?", fontFamily = InterFontFamily) },
+            text = {
+                Text(
+                    "Все сохранённые комнаты будут удалены. Вы уверены, что хотите выйти?",
+                    fontFamily = InterFontFamily
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showLogoutConfirm = false
+                        viewModel.logout()
+                        onLogout()
+                    }
+                ) {
+                    Text("Выйти", color = MaterialTheme.colorScheme.error, fontFamily = InterFontFamily)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showLogoutConfirm = false }) {
+                    Text("Отмена", fontFamily = InterFontFamily)
+                }
+            }
+        )
     }
 }
 
