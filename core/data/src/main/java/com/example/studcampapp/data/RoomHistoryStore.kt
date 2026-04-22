@@ -32,6 +32,22 @@ object RoomHistoryStore {
         persist()
     }
 
+    fun updateNickname(roomId: String, nickname: String) {
+        val idx = _rooms.indexOfFirst { it.id == roomId }
+        if (idx >= 0) {
+            _rooms[idx] = _rooms[idx].copy(myNickname = nickname)
+            persist()
+        }
+    }
+
+    fun updateRoomName(roomId: String, name: String) {
+        val idx = _rooms.indexOfFirst { it.id == roomId }
+        if (idx >= 0) {
+            _rooms[idx] = _rooms[idx].copy(name = name)
+            persist()
+        }
+    }
+
     fun updateLastMessage(id: String, message: String) {
         val idx = _rooms.indexOfFirst { it.id == id }
         if (idx >= 0) {

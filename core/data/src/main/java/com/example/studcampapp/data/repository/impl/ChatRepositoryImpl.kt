@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import android.os.Build
 import androidx.annotation.RequiresApi
+import com.example.studcampapp.data.RoomHistoryStore
 import com.example.studcampapp.data.repository.ChatRepository
 import com.example.studcampapp.model.ChatMessage
 import com.example.studcampapp.model.FileInfo
@@ -11,6 +12,12 @@ import com.example.studcampapp.model.User
 import com.example.studcampapp.network.ChatClient
 
 object ChatRepositoryImpl : ChatRepository {
+    init {
+        ChatClient.onRoomRenamed = { name ->
+            val roomId = ChatClient.currentRoomId
+            if (roomId.isNotBlank()) RoomHistoryStore.updateRoomName(roomId, name)
+        }
+    }
     override val messages: List<ChatMessage> get() = ChatClient.messages
     override val participants: List<User> get() = ChatClient.participants
     override val myUser: User? get() = ChatClient.myUser

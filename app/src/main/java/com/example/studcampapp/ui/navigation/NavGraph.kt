@@ -100,9 +100,9 @@ fun NavGraph() {
                     navController.popBackStack()
                 },
                 onCloseRoom = {
+                    navController.popBackStack()
                     ChatRepositoryImpl.disconnect()
                     HostForegroundService.stop(context)
-                    navController.popBackStack()
                 },
                 onRoomInfo = { navController.navigate(Route.RoomInfo) }
             )

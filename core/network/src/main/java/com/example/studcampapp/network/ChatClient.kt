@@ -71,6 +71,8 @@ object ChatClient {
     var currentRoomId: String = ""
         private set
 
+    var onRoomRenamed: ((String) -> Unit)? = null
+
     private var sessionId: String? = null
     private var serverIp: String = ""
     private var serverPort: Int = HostConnectionConfig.DEFAULT_PORT
@@ -342,6 +344,7 @@ object ChatClient {
             }
             is WsServerEvent.RoomRenamed -> {
                 currentRoomName = event.name
+                onRoomRenamed?.invoke(event.name)
             }
             is WsServerEvent.HostClosed -> {
                 isHostClosed = true
