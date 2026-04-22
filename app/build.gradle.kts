@@ -1,9 +1,25 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
 }
+
+val localKeystoreProps = rootProject.file("keystore.properties").let { f ->
+    if (f.exists()) Properties().apply { load(f.inputStream()) } else null
+}
+val releaseStorePassword = localKeystoreProps?.getProperty("storePassword")
+    ?: System.getenv("KEYSTORE_PASSWORD")
+val releaseKeyAlias = localKeystoreProps?.getProperty("keyAlias")
+    ?: System.getenv("KEY_ALIAS")
+val releaseKeyPassword = localKeystoreProps?.getProperty("keyPassword")
+    ?: System.getenv("KEY_PASSWORD")
+val releaseStoreFile = localKeystoreProps?.getProperty("storeFile")
+    ?: System.getenv("KEYSTORE_FILE")
+    ?: "../lyra-release.keystore"
+val canSign = releaseStorePassword != null && releaseKeyAlias != null && releaseKeyPassword != null
 
 android {
     namespace = "com.example.studcampapp"
@@ -22,12 +38,14 @@ android {
     }
 
 
-    signingConfigs {
-        create("release") {
-            storeFile = file(System.getenv("KEYSTORE_FILE") ?: "../lyra-release.keystore")
-            storePassword = System.getenv("KEYSTORE_PASSWORD")
-            keyAlias = System.getenv("KEY_ALIAS")
-            keyPassword = System.getenv("KEY_PASSWORD")
+    if (canSign) {
+        signingConfigs {
+            create("release") {
+                storeFile = file(releaseStoreFile)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
         }
     }
 
@@ -38,7 +56,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = signingConfigs.getByName("release")
+            if (canSign) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 
