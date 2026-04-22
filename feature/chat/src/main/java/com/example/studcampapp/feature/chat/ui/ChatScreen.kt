@@ -504,8 +504,8 @@ fun ChatScreen(
         )
     ) {
         HostClosedOverlay(onLeave = {
-            viewModel.disconnect()
             onLeave()
+            viewModel.disconnect()
         })
     }
 

@@ -47,6 +47,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -327,7 +328,9 @@ private fun DiscoveryRoomsSection(
             text = "Идёт поиск...",
             fontSize = 13.sp,
             fontFamily = InterFontFamily,
-            color = appColors.textSecondary.copy(alpha = 0.6f)
+            color = appColors.textSecondary.copy(alpha = 0.6f),
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth()
         )
         return
     }

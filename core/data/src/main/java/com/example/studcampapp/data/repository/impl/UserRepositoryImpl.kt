@@ -21,5 +21,7 @@ object UserRepositoryImpl : UserRepository {
     override fun updateProfile(login: String, phone: String) {
         UserStore.updateProfile(login, phone)
         ChatClient.updateLogin(login)
+        val roomId = ChatClient.currentRoomId
+        if (roomId.isNotBlank()) RoomHistoryStore.updateNickname(roomId, login)
     }
 }

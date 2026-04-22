@@ -65,12 +65,7 @@ class ChatListViewModel(
                 }
             }
             if (!joined) {
-                if (isRoomUnavailableError(lastError)) {
-                    roomRepository.removeRoom(room.id)
-                    connectError = "Комната больше не существует или была закрыта хостом"
-                } else {
-                    connectError = "Не удалось подключиться: $lastError"
-                }
+                connectError = mapReconnectError(lastError, room.id)
                 connectingId = null
                 return@launch
             }
@@ -83,14 +78,23 @@ class ChatListViewModel(
         }
     }
 
-    private fun isRoomUnavailableError(error: String): Boolean {
+    private fun mapReconnectError(error: String, roomId: String): String {
         val msg = error.lowercase()
-        return msg.contains("connection refused") ||
-            msg.contains("no route to host") ||
-            msg.contains("timed out") ||
-            msg.contains("timeout") ||
-            msg.contains("unable to resolve host") ||
-            msg.contains("failed to connect") ||
-            msg.contains("not found")
+        return when {
+            msg.contains("connection refused") || msg.contains("not found") || msg.contains("404") -> {
+                roomRepository.removeRoom(roomId)
+                "Комната не существует или была закрыта"
+            }
+            msg.contains("no route to host") || msg.contains("unable to resolve host") ||
+            msg.contains("failed to connect") -> {
+                roomRepository.removeRoom(roomId)
+                "Не удалось найти сервер в сети"
+            }
+            msg.contains("timed out") || msg.contains("timeout") ->
+                "Сервер не отвечает — проверь подключение"
+            msg.contains("nickname is already in use") || msg.contains("conflict") || msg.contains("409") ->
+                "Этот никнейм уже занят в комнате"
+            else -> "Не удалось подключиться: $error"
+        }
     }
 }
