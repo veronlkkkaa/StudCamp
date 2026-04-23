@@ -67,7 +67,7 @@ class HostWebSocketTest {
     @Test
     fun ws_disconnect_broadcastsUserLeft() = testApplication {
         application {
-            hostModule(SessionStore())
+            hostModule(SessionStore(), gracePeriodMs = 0L, sweepIntervalMs = 50L)
         }
 
         val sessionA = join("alice")

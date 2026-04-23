@@ -509,6 +509,28 @@ fun ChatScreen(
         })
     }
 
+    if (viewModel.sessionInvalidated) {
+        AlertDialog(
+            onDismissRequest = {},
+            properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false),
+            title = { Text("Сессия завершена", fontFamily = InterFontFamily) },
+            text = {
+                Text(
+                    "Время сессии истекло. Войдите в комнату заново.",
+                    fontFamily = InterFontFamily
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.disconnect()
+                    onLeave()
+                }) {
+                    Text("OK", fontFamily = InterFontFamily)
+                }
+            }
+        )
+    }
+
     if (videoLoading) {
         Box(
             modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.6f)),

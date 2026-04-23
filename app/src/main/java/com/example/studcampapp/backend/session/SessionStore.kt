@@ -6,6 +6,7 @@ import com.example.studcampapp.model.RoomState
 import com.example.studcampapp.model.User
 import com.example.studcampapp.network.dto.JoinRequest
 import com.example.studcampapp.network.dto.JoinResponse
+import java.time.Instant
 import java.time.LocalDateTime
 import java.util.UUID
 import kotlinx.coroutines.sync.Mutex
@@ -18,9 +19,14 @@ class SessionStore {
         const val MAX_MESSAGES = 500
     }
 
+    private data class SessionEntry(
+        val userId: String,
+        val disconnectedAt: Instant? = null
+    )
+
     private val mutex = Mutex()
     private val usersById = LinkedHashMap<String, User>()
-    private val sessionsById = LinkedHashMap<String, String>()
+    private val sessionsById = LinkedHashMap<String, SessionEntry>()
     private val messages = ArrayDeque<ChatMessage>()
     private var nextMessageId = 1
     private var nextGuestNumber = 1
@@ -53,7 +59,7 @@ class SessionStore {
         val sessionId = UUID.randomUUID().toString()
 
         usersById[user.id] = user
-        sessionsById[sessionId] = user.id
+        sessionsById[sessionId] = SessionEntry(userId = user.id)
 
         JoinResponse(
             sessionId = sessionId,
@@ -63,12 +69,12 @@ class SessionStore {
     }
 
     suspend fun getUserIdBySessionId(sessionId: String): String? = mutex.withLock {
-        sessionsById[sessionId]
+        sessionsById[sessionId]?.userId
     }
 
     suspend fun getUserBySessionId(sessionId: String): User? = mutex.withLock {
-        val userId = sessionsById[sessionId] ?: return@withLock null
-        usersById[userId]
+        val entry = sessionsById[sessionId] ?: return@withLock null
+        usersById[entry.userId]
     }
 
     suspend fun getRoomState(): RoomState = mutex.withLock {
@@ -76,7 +82,7 @@ class SessionStore {
     }
 
     suspend fun addMessage(sessionId: String, text: String, fileInfo: FileInfo? = null): ChatMessage? = mutex.withLock {
-        val userId = sessionsById[sessionId] ?: return@withLock null
+        val userId = sessionsById[sessionId]?.userId ?: return@withLock null
         val user = usersById[userId] ?: return@withLock null
 
         val message = ChatMessage(
@@ -107,13 +113,42 @@ class SessionStore {
         )
     }
 
-    suspend fun leave(sessionId: String): User? = mutex.withLock {
-        val userId = sessionsById.remove(sessionId) ?: return@withLock null
-        val hasOtherSessions = sessionsById.values.any { it == userId }
-        if (hasOtherSessions) {
-            return@withLock null
+    suspend fun markDisconnected(sessionId: String) = mutex.withLock {
+        val entry = sessionsById[sessionId] ?: return@withLock
+        sessionsById[sessionId] = entry.copy(disconnectedAt = Instant.now())
+    }
+
+    // Returns true if the session was in disconnected state (= it's a reconnect).
+    suspend fun markReconnected(sessionId: String): Boolean = mutex.withLock {
+        val entry = sessionsById[sessionId] ?: return@withLock false
+        if (entry.disconnectedAt == null) return@withLock false
+        sessionsById[sessionId] = entry.copy(disconnectedAt = null)
+        true
+    }
+
+    suspend fun sweepExpiredSessions(graceMillis: Long): List<User> = mutex.withLock {
+        val now = Instant.now()
+        val toRemove = sessionsById.entries.filter { (_, entry) ->
+            val disconnectedAt = entry.disconnectedAt ?: return@filter false
+            java.time.Duration.between(disconnectedAt, now).toMillis() > graceMillis
         }
-        usersById.remove(userId)
+        val removedUsers = mutableListOf<User>()
+        for ((sessionId, entry) in toRemove) {
+            sessionsById.remove(sessionId)
+            val stillHasSessions = sessionsById.values.any { it.userId == entry.userId }
+            if (!stillHasSessions) {
+                val user = usersById.remove(entry.userId)
+                if (user != null) removedUsers.add(user)
+            }
+        }
+        removedUsers
+    }
+
+    suspend fun leave(sessionId: String): User? = mutex.withLock {
+        val entry = sessionsById.remove(sessionId) ?: return@withLock null
+        val hasOtherSessions = sessionsById.values.any { it.userId == entry.userId }
+        if (hasOtherSessions) return@withLock null
+        usersById.remove(entry.userId)
     }
 
     suspend fun clear() = mutex.withLock {

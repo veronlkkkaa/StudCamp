@@ -6,12 +6,18 @@ import android.app.NotificationManager
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
+import android.net.wifi.WifiManager
 import android.os.Build
 import androidx.core.app.NotificationCompat
+import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import com.example.studcampapp.R
 
 class HostForegroundService : Service() {
+
+    private var wifiLock: WifiManager.WifiLock? = null
+    private var multicastLock: WifiManager.MulticastLock? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -22,7 +28,20 @@ class HostForegroundService : Service() {
         when (intent?.action) {
             ACTION_START_HOST -> {
                 val roomName = intent.getStringExtra(EXTRA_ROOM_NAME)?.ifBlank { DEFAULT_ROOM_NAME } ?: DEFAULT_ROOM_NAME
-                startForeground(NOTIFICATION_ID, buildNotification(roomName))
+                val serviceType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC else 0
+                ServiceCompat.startForeground(this, NOTIFICATION_ID, buildNotification(roomName), serviceType)
+
+                val wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+                wifiLock = wifiManager.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "studcamp:host:wifi").apply {
+                    setReferenceCounted(false)
+                    acquire()
+                }
+                multicastLock = wifiManager.createMulticastLock("studcamp:host:multicast").apply {
+                    setReferenceCounted(false)
+                    acquire()
+                }
+
                 HostRuntime.start(applicationContext, roomName)
             }
 
@@ -36,6 +55,10 @@ class HostForegroundService : Service() {
     }
 
     override fun onDestroy() {
+        wifiLock?.let { if (it.isHeld) it.release() }
+        multicastLock?.let { if (it.isHeld) it.release() }
+        wifiLock = null
+        multicastLock = null
         HostRuntime.stop()
         super.onDestroy()
     }

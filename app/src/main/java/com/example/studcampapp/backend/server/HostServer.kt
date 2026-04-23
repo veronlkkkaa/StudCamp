@@ -41,6 +41,9 @@ import io.ktor.websocket.close
 import io.ktor.websocket.readText
 import java.io.File
 import java.util.UUID
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 
@@ -49,9 +52,14 @@ class HostServer(
     private val fileStore: FileStore,
     private val nsdPublisher: NsdPublisher,
     private var roomName: String,
+    private val roomId: String,
     private val host: String = "0.0.0.0",
     private val port: Int = HostConnectionConfig.DEFAULT_PORT
 ) {
+    companion object {
+        const val SESSION_GRACE_PERIOD_MS = 3 * 60 * 1000L
+    }
+
     private var engine: ApplicationEngine? = null
     private val connectionRegistry = WsConnectionRegistry()
     private val wsJson = Json {
@@ -75,11 +83,10 @@ class HostServer(
                     fileStore = fileStore,
                     connectionRegistry = connectionRegistry,
                     wsJson = wsJson,
+                    gracePeriodMs = SESSION_GRACE_PERIOD_MS,
                     onRenameRoom = { newName ->
                         roomName = newName
                         sessionStore.setRoomName(newName)
-                        nsdPublisher.stop()
-                        nsdPublisher.start(serviceName = newName, port = port)
                         connectionRegistry.broadcast(WsServerEvent.RoomRenamed(newName), wsJson)
                     }
                 )
@@ -87,7 +94,13 @@ class HostServer(
         ).start(wait = false)
 
         engine = startedEngine
-        nsdPublisher.start(serviceName = roomName, port = port)
+        nsdPublisher.start(
+            serviceName = "lyra-$roomId",
+            port = port,
+            displayName = roomName
+        )
+        nsdPublisher.startNetworkMonitoring()
+
         println("HostServer started on $host:$port")
     }
 
@@ -116,14 +129,30 @@ fun Application.hostModule(
         explicitNulls = false
         classDiscriminator = "type"
     },
+    gracePeriodMs: Long = HostServer.SESSION_GRACE_PERIOD_MS,
+    sweepIntervalMs: Long = 30_000L,
     onRenameRoom: suspend (String) -> Unit = {}
 ) {
     val maxFileSizeBytes = 100L * 1024L * 1024L
 
+    launch {
+        while (isActive) {
+            delay(sweepIntervalMs)
+            val expired = sessionStore.sweepExpiredSessions(gracePeriodMs)
+            for (user in expired) {
+                connectionRegistry.broadcast(WsServerEvent.UserLeft(user.id), wsJson)
+            }
+        }
+    }
+
     install(ContentNegotiation) {
         json(wsJson)
     }
-    install(WebSockets)
+    install(WebSockets) {
+        pingPeriodMillis = 15_000L
+        timeoutMillis = 30_000L
+        maxFrameSize = Long.MAX_VALUE
+    }
 
     routing {
         get("/health") {
@@ -258,6 +287,7 @@ private fun Route.wsRoute(
             return@webSocket
         }
         val userId = user.id
+        val isReconnect = sessionStore.markReconnected(sessionId)
 
         connectionRegistry.register(sessionId, userId, this)
         connectionRegistry.sendTo(
@@ -265,7 +295,9 @@ private fun Route.wsRoute(
             WsServerEvent.RoomStateEvent(sessionStore.getRoomState()),
             wsJson
         )
-        connectionRegistry.broadcast(WsServerEvent.UserJoined(user), wsJson)
+        if (!isReconnect) {
+            connectionRegistry.broadcast(WsServerEvent.UserJoined(user), wsJson)
+        }
 
         try {
             for (frame in incoming) {
@@ -349,10 +381,7 @@ private fun Route.wsRoute(
             }
         } finally {
             connectionRegistry.unregister(sessionId)
-            val leftUser = sessionStore.leave(sessionId)
-            if (leftUser != null) {
-                connectionRegistry.broadcast(WsServerEvent.UserLeft(leftUser.id), wsJson)
-            }
+            sessionStore.markDisconnected(sessionId)
         }
     }
 }
