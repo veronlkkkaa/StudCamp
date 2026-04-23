@@ -28,10 +28,11 @@ class JoinRoomUseCase(
         }
         return lastResult.onSuccess {
             val serverName = chatRepository.currentRoomName.ifBlank { roomName }
+            val roomId = chatRepository.currentRoomId
             roomRepository.setRoomName(serverName)
             roomRepository.saveRoom(
                 SavedRoom(
-                    id = "$ip:$port",
+                    id = roomId,
                     name = serverName,
                     serverIp = ip,
                     serverPort = port,

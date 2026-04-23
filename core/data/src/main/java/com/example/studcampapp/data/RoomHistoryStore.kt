@@ -70,16 +70,16 @@ object RoomHistoryStore {
     }
 
     private fun load() {
-        val str = prefs?.getString("rooms", null) ?: return
+        val str = prefs?.getString("rooms_v2", null) ?: return
         val list = runCatching { json.decodeFromString<List<SavedRoom>>(str) }.getOrNull() ?: return
         val deduped = list
             .sortedByDescending { it.lastVisited }
-            .distinctBy { "${it.serverIp}:${it.serverPort}" }
+            .distinctBy { it.id }
         _rooms.clear()
         _rooms.addAll(deduped)
     }
 
     private fun persist() {
-        prefs?.edit()?.putString("rooms", json.encodeToString(_rooms.toList()))?.apply()
+        prefs?.edit()?.putString("rooms_v2", json.encodeToString(_rooms.toList()))?.apply()
     }
 }

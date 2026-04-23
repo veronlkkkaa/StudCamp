@@ -22,7 +22,8 @@ object HostRuntime {
             sessionStore = sessionStore,
             fileStore = fileStore,
             nsdPublisher = nsdPublisher,
-            roomName = roomName
+            roomName = roomName,
+            roomId = roomId
         )
         hostServer?.start()
     }

@@ -1,6 +1,10 @@
 package com.example.studcampapp.feature.room.ui
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -13,6 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -33,10 +38,21 @@ fun CreateRoomScreen(
     viewModel: RoomViewModel = viewModel()
 ) {
     val appColors = LocalAppColors.current
+    val context = LocalContext.current
     var roomName by remember { mutableStateOf("") }
     var localError by remember { mutableStateOf<String?>(null) }
+    var pendingRoomName by remember { mutableStateOf<String?>(null) }
     val nickname = UserRepositoryImpl.currentUser?.login ?: ""
     val hostIp = remember { NetworkEndpointResolver.resolveHostIp() }
+
+    val notificationPermLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { _ ->
+        val name = pendingRoomName ?: return@rememberLauncherForActivityResult
+        pendingRoomName = null
+        onStartHost(name)
+        viewModel.join(hostIp, HostConnectionConfig.DEFAULT_PORT, nickname, name)
+    }
 
     LaunchedEffect(viewModel.navigateToChat) {
         if (viewModel.navigateToChat) {
@@ -119,6 +135,14 @@ fun CreateRoomScreen(
                     }
                     val safeRoomName = roomName.trim()
                     localError = null
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        val granted = context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+                        if (!granted) {
+                            pendingRoomName = safeRoomName
+                            notificationPermLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            return@Button
+                        }
+                    }
                     onStartHost(safeRoomName)
                     viewModel.join(hostIp, HostConnectionConfig.DEFAULT_PORT, nickname, safeRoomName)
                 },

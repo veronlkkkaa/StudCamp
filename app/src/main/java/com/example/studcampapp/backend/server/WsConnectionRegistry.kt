@@ -5,8 +5,11 @@ import io.ktor.server.websocket.WebSocketServerSession
 import io.ktor.websocket.CloseReason
 import io.ktor.websocket.Frame
 import io.ktor.websocket.close
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.Json
 
 class WsConnectionRegistry {
@@ -44,12 +47,18 @@ class WsConnectionRegistry {
     suspend fun broadcast(event: WsServerEvent, json: Json) {
         val payload = json.encodeToString(WsServerEvent.serializer(), event)
         val snapshot = mutex.withLock { sessions.toMap() }
-        snapshot.forEach { (sessionId, connection) ->
-            val sent = runCatching {
-                connection.session.send(Frame.Text(payload))
-            }.isSuccess
-            if (!sent) {
-                unregister(sessionId)
+        coroutineScope {
+            snapshot.forEach { (sessionId, connection) ->
+                launch {
+                    val sent = runCatching {
+                        withTimeout(5_000L) {
+                            connection.session.send(Frame.Text(payload))
+                        }
+                    }.isSuccess
+                    if (!sent) {
+                        unregister(sessionId)
+                    }
+                }
             }
         }
     }
