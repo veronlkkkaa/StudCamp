@@ -55,6 +55,7 @@ import android.content.Intent
 import android.widget.MediaController
 import android.widget.VideoView
 import androidx.compose.material3.CircularProgressIndicator
+import android.util.Log
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -383,9 +384,10 @@ fun ChatScreen(
             }
         }
 
-        if (!connectionError.isNullOrBlank()) {
+        val displayError = connectionError ?: viewModel.lastServerError
+        if (!displayError.isNullOrBlank()) {
             Text(
-                text = connectionError,
+                text = displayError,
                 color = MaterialTheme.colorScheme.error,
                 fontSize = 12.sp,
                 fontFamily = InterFontFamily,
@@ -783,6 +785,12 @@ private fun AttachmentView(
             it.fileUrl.startsWith("http") -> it.fileUrl
             it.fileUrl.startsWith("/") -> "$baseUrl${it.fileUrl}"
             else -> "$baseUrl/${it.fileUrl}"
+        }
+    }
+
+    LaunchedEffect(fileInfo?.id) {
+        if (fileInfo != null) {
+            Log.d("StudCampFile", "render attachment: fileUrl=${fileInfo.fileUrl} baseUrl=$baseUrl → $remoteUrl")
         }
     }
 

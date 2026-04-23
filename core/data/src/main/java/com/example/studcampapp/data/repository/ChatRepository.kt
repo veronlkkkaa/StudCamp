@@ -14,6 +14,7 @@ interface ChatRepository {
     val isConnected: Boolean
     val sessionInvalidated: Boolean
     val connectionError: String?
+    val lastServerError: String?
     val uploadProgress: Float?
     val baseUrl: String
     val currentRoomName: String

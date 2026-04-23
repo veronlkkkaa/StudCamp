@@ -9,6 +9,7 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.net.wifi.WifiManager
 import android.os.Build
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
@@ -25,27 +26,50 @@ class HostForegroundService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        Log.d(TAG, "onStartCommand: action=${intent?.action} sdk=${Build.VERSION.SDK_INT}")
         when (intent?.action) {
             ACTION_START_HOST -> {
                 val roomName = intent.getStringExtra(EXTRA_ROOM_NAME)?.ifBlank { DEFAULT_ROOM_NAME } ?: DEFAULT_ROOM_NAME
                 val serviceType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
                     ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC else 0
-                ServiceCompat.startForeground(this, NOTIFICATION_ID, buildNotification(roomName), serviceType)
-
-                val wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
-                wifiLock = wifiManager.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "studcamp:host:wifi").apply {
-                    setReferenceCounted(false)
-                    acquire()
-                }
-                multicastLock = wifiManager.createMulticastLock("studcamp:host:multicast").apply {
-                    setReferenceCounted(false)
-                    acquire()
+                Log.d(TAG, "startForeground: roomName=$roomName serviceType=$serviceType")
+                try {
+                    ServiceCompat.startForeground(this, NOTIFICATION_ID, buildNotification(roomName), serviceType)
+                    Log.d(TAG, "startForeground OK")
+                } catch (e: Exception) {
+                    Log.e(TAG, "startForeground FAILED", e)
+                    stopSelf()
+                    return START_NOT_STICKY
                 }
 
-                HostRuntime.start(applicationContext, roomName)
+                val wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
+                if (wifiManager != null) {
+                    runCatching {
+                        wifiLock = wifiManager.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "lyra:host:wifi").also {
+                            it.setReferenceCounted(false)
+                            it.acquire()
+                        }
+                        Log.d(TAG, "wifiLock acquired")
+                    }.onFailure { Log.w(TAG, "wifiLock failed", it) }
+                    runCatching {
+                        multicastLock = wifiManager.createMulticastLock("lyra:host:multicast").also {
+                            it.setReferenceCounted(false)
+                            it.acquire()
+                        }
+                        Log.d(TAG, "multicastLock acquired")
+                    }.onFailure { Log.w(TAG, "multicastLock failed", it) }
+                } else {
+                    Log.w(TAG, "WifiManager is null")
+                }
+
+                Log.d(TAG, "calling HostRuntime.start")
+                runCatching { HostRuntime.start(applicationContext, roomName) }
+                    .onSuccess { Log.d(TAG, "HostRuntime.start OK") }
+                    .onFailure { Log.e(TAG, "HostRuntime.start FAILED", it) }
             }
 
             ACTION_STOP_HOST -> {
+                Log.d(TAG, "stopping host")
                 HostRuntime.stop()
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
@@ -87,6 +111,7 @@ class HostForegroundService : Service() {
     }
 
     companion object {
+        private const val TAG = "HostFgService"
         private const val CHANNEL_ID = "lyra_host_channel"
         private const val NOTIFICATION_ID = 1001
         private const val DEFAULT_ROOM_NAME = "Lyra Room"
@@ -96,11 +121,17 @@ class HostForegroundService : Service() {
         const val EXTRA_ROOM_NAME = "extra_room_name"
 
         fun start(context: Context, roomName: String) {
-            val intent = Intent(context, HostForegroundService::class.java).apply {
-                action = ACTION_START_HOST
-                putExtra(EXTRA_ROOM_NAME, roomName)
+            Log.d(TAG, "HostForegroundService.start() roomName=$roomName")
+            try {
+                val intent = Intent(context, HostForegroundService::class.java).apply {
+                    action = ACTION_START_HOST
+                    putExtra(EXTRA_ROOM_NAME, roomName)
+                }
+                ContextCompat.startForegroundService(context, intent)
+                Log.d(TAG, "startForegroundService dispatched OK")
+            } catch (e: Exception) {
+                Log.e(TAG, "startForegroundService FAILED", e)
             }
-            ContextCompat.startForegroundService(context, intent)
         }
 
         fun stop(context: Context) {

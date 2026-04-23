@@ -1,5 +1,6 @@
 package com.example.studcampapp.backend.session
 
+import android.util.Log
 import com.example.studcampapp.model.ChatMessage
 import com.example.studcampapp.model.FileInfo
 import com.example.studcampapp.model.RoomState
@@ -82,6 +83,7 @@ class SessionStore {
     }
 
     suspend fun addMessage(sessionId: String, text: String, fileInfo: FileInfo? = null): ChatMessage? = mutex.withLock {
+        Log.d("StudCampSession", "addMessage: sessionId=$sessionId textLen=${text.length} hasFileInfo=${fileInfo != null} fileId=${fileInfo?.id}")
         val userId = sessionsById[sessionId]?.userId ?: return@withLock null
         val user = usersById[userId] ?: return@withLock null
 
@@ -96,6 +98,7 @@ class SessionStore {
         if (messages.size > MAX_MESSAGES) {
             messages.removeFirst()
         }
+        Log.d("StudCampSession", "addMessage OK messageId=${message.id}")
         message
     }
 
@@ -115,6 +118,7 @@ class SessionStore {
 
     suspend fun markDisconnected(sessionId: String) = mutex.withLock {
         val entry = sessionsById[sessionId] ?: return@withLock
+        Log.d("StudCampSession", "markDisconnected session=$sessionId")
         sessionsById[sessionId] = entry.copy(disconnectedAt = Instant.now())
     }
 
@@ -123,6 +127,7 @@ class SessionStore {
         val entry = sessionsById[sessionId] ?: return@withLock false
         if (entry.disconnectedAt == null) return@withLock false
         sessionsById[sessionId] = entry.copy(disconnectedAt = null)
+        Log.d("StudCampSession", "markReconnected session=$sessionId wasDisconnected=true")
         true
     }
 
@@ -132,13 +137,17 @@ class SessionStore {
             val disconnectedAt = entry.disconnectedAt ?: return@filter false
             java.time.Duration.between(disconnectedAt, now).toMillis() > graceMillis
         }
+        Log.d("StudCampSession", "sweepExpiredSessions: checking ${sessionsById.size} sessions, ${toRemove.size} expired")
         val removedUsers = mutableListOf<User>()
         for ((sessionId, entry) in toRemove) {
             sessionsById.remove(sessionId)
             val stillHasSessions = sessionsById.values.any { it.userId == entry.userId }
             if (!stillHasSessions) {
                 val user = usersById.remove(entry.userId)
-                if (user != null) removedUsers.add(user)
+                if (user != null) {
+                    removedUsers.add(user)
+                    Log.d("StudCampSession", "swept user=${user.login} userId=${user.id}")
+                }
             }
         }
         removedUsers

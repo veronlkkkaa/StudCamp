@@ -2,6 +2,7 @@ package com.example.studcampapp.feature.chat.ui
 
 import android.content.Context
 import android.net.Uri
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.studcampapp.data.repository.ChatRepository
@@ -32,6 +33,7 @@ class ChatViewModel(
     val isHostClosed get() = chatRepository.isHostClosed
     val sessionInvalidated get() = chatRepository.sessionInvalidated
     val connectionError get() = chatRepository.connectionError
+    val lastServerError get() = chatRepository.lastServerError
     val uploadProgress get() = chatRepository.uploadProgress
     val roomName get() = chatRepository.currentRoomName
     val baseUrl get() = chatRepository.baseUrl
@@ -64,7 +66,10 @@ class ChatViewModel(
         viewModelScope.launch {
             uploadFileUseCase(context, attachment.uri, attachment.fileName, mimeType)
                 .onSuccess { fileInfo -> sendMessageUseCase(text, fileInfo) }
-                .onFailure { sendMessageUseCase(text) }
+                .onFailure { e ->
+                    Log.w("StudCampFile", "uploadAndSend: upload failed, sending text only", e)
+                    sendMessageUseCase(text)
+                }
         }
     }
 }

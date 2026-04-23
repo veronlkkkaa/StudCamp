@@ -5,6 +5,7 @@ import android.content.Context
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
+import android.util.Log
 import androidx.annotation.RequiresApi
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -63,6 +64,8 @@ object ChatClient {
         private set
     var connectionError by mutableStateOf<String?>(null)
         private set
+    var lastServerError by mutableStateOf<String?>(null)
+        private set
     var uploadProgress by mutableStateOf<Float?>(null)
         private set
     var isHostClosed by mutableStateOf(false)
@@ -111,6 +114,7 @@ object ChatClient {
     suspend fun join(ip: String, port: Int, login: String): Result<Unit> = runCatching {
         serverIp = ip
         serverPort = port
+        Log.d("StudCampWS", "client: join $ip:$port login=$login")
         val httpResponse = httpClient.post("http://$ip:$port/join") {
             header(HttpHeaders.ContentType, "application/json")
             setBody(
@@ -127,10 +131,12 @@ object ChatClient {
         if (httpResponse.status.value !in 200..299) {
             val errorMap = runCatching { httpResponse.body<Map<String, String>>() }.getOrNull()
             val serverMsg = errorMap?.get("error") ?: ""
+            Log.w("StudCampWS", "client: join failed HTTP ${httpResponse.status.value} msg=$serverMsg")
             throw Exception(serverMsg.ifBlank { "HTTP ${httpResponse.status.value}" })
         }
         val response: JoinResponse = httpResponse.body()
         sessionId = response.sessionId
+        Log.d("StudCampWS", "client: join OK sessionId=${response.sessionId}")
         myUser = response.user
         currentRoomId = response.state.id
         withContext(Dispatchers.Main) {
@@ -149,14 +155,33 @@ object ChatClient {
         connectJob = scope.launch {
             var consecutiveFailures = 0
             while (sessionId == sid && !isHostClosed) {
+                Log.d("StudCampWS", "client: connecting to $serverIp:$serverPort, sessionId=$sid, attempt=$consecutiveFailures")
                 var sessionExpired = false
                 val wsResult = runCatching {
                     httpClient.webSocket("ws://$serverIp:$serverPort/ws?sessionId=$sid") {
                         withContext(Dispatchers.Main) { connectionError = null; isConnected = true }
+                        Log.d("StudCampWS", "client: WS connected")
                         consecutiveFailures = 0
                         launch {
-                            pendingEvents.consumeEach { event ->
-                                send(Frame.Text(wsJson.encodeToString(WsClientEvent.serializer(), event)))
+                            try {
+                                pendingEvents.consumeEach { event ->
+                                    val payload = runCatching {
+                                        wsJson.encodeToString(WsClientEvent.serializer(), event)
+                                    }
+                                    payload.onFailure { e ->
+                                        Log.e("StudCampWS", "client: encode failed for ${event::class.simpleName}", e)
+                                        return@consumeEach
+                                    }
+                                    val payloadStr = payload.getOrThrow()
+                                    Log.d("StudCampWS", "client: sending ${event::class.simpleName}, size=${payloadStr.length}")
+                                    runCatching { send(Frame.Text(payloadStr)) }.onFailure { e ->
+                                        Log.e("StudCampWS", "client: send failed for ${event::class.simpleName}", e)
+                                    }
+                                }
+                            } catch (e: CancellationException) {
+                                throw e
+                            } catch (e: Exception) {
+                                Log.e("StudCampWS", "client: pendingEvents loop died", e)
                             }
                         }
                         incoming.consumeEach { frame ->
@@ -176,6 +201,7 @@ object ChatClient {
                 withContext(Dispatchers.Main) { isConnected = false }
 
                 if (sessionExpired) {
+                    Log.w("StudCampWS", "client: session invalidated by server")
                     withContext(Dispatchers.Main) { sessionInvalidated = true }
                     break
                 }
@@ -188,6 +214,7 @@ object ChatClient {
                 if (wsResult.isFailure) {
                     consecutiveFailures++
                     if (consecutiveFailures >= NSD_REDISCOVERY_FAILURES_THRESHOLD) {
+                        Log.d("StudCampWS", "client: starting rediscovery after $consecutiveFailures failures")
                         val ctx = appContext
                         val roomId = currentRoomId
                         if (ctx != null && roomId.isNotBlank()) {
@@ -213,6 +240,7 @@ object ChatClient {
 
     @RequiresApi(Build.VERSION_CODES.O)
     fun sendMessage(text: String, fileInfo: FileInfo? = null) {
+        lastServerError = null
         val user = myUser ?: return
         val tempId = --tempIdCounter
         val tempMsg = ChatMessage(
@@ -240,6 +268,7 @@ object ChatClient {
             val bytes = withContext(Dispatchers.IO) {
                 context.contentResolver.openInputStream(uri)!!.use { it.readBytes() }
             }
+            Log.d("StudCampFile", "client: upload start, name=$fileName size=${bytes.size} to $baseUrl")
             val response: UploadResponse = httpClient.post("$baseUrl/files/upload") {
                 header(HttpHeaders.Authorization, "Session $sid")
                 setBody(MultiPartFormDataContent(formData {
@@ -255,9 +284,13 @@ object ChatClient {
                 }
             }.body()
             withContext(Dispatchers.Main) { uploadProgress = null }
+            Log.d("StudCampFile", "client: upload OK, id=${response.fileInfo.id}, url=${response.fileInfo.fileUrl}")
             response.fileInfo
         }.also { result ->
-            if (result.isFailure) withContext(Dispatchers.Main) { uploadProgress = null }
+            if (result.isFailure) {
+                Log.e("StudCampFile", "client: upload failed", result.exceptionOrNull())
+                withContext(Dispatchers.Main) { uploadProgress = null }
+            }
         }
     }
 
@@ -345,6 +378,7 @@ object ChatClient {
             messages.clear()
             participants.clear()
             connectionError = null
+            lastServerError = null
             isHostClosed = false
             isConnected = false
             sessionInvalidated = false
@@ -365,6 +399,8 @@ object ChatClient {
 
     @RequiresApi(Build.VERSION_CODES.O)
     private fun handleEvent(event: WsServerEvent) {
+        val extra = if (event is WsServerEvent.NewMessage) " hasFileInfo=${event.message.fileInfo != null}" else ""
+        Log.d("StudCampWS", "client: received ${event::class.simpleName}$extra")
         when (event) {
             is WsServerEvent.RoomStateEvent -> {
                 messages.clear()
@@ -420,6 +456,12 @@ object ChatClient {
                         isSystem = true
                     ))
                 }
+            }
+            is WsServerEvent.Error -> {
+                Log.e("StudCampWS", "client: received Error from server: code=${event.code} message=${event.message}")
+                val pendingIdx = messages.indexOfLast { it.isPending && it.user.id == myUser?.id }
+                if (pendingIdx >= 0) messages.removeAt(pendingIdx)
+                lastServerError = "${event.code}: ${event.message}"
             }
             else -> {}
         }
