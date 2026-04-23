@@ -18,6 +18,7 @@ class NicknameOccupiedException(message: String) : IllegalStateException(message
 class SessionStore {
     private companion object {
         const val MAX_MESSAGES = 500
+        const val MAX_CLIENT_MSG_IDS = 500
     }
 
     private data class SessionEntry(
@@ -29,6 +30,7 @@ class SessionStore {
     private val usersById = LinkedHashMap<String, User>()
     private val sessionsById = LinkedHashMap<String, SessionEntry>()
     private val messages = ArrayDeque<ChatMessage>()
+    private val recentClientMsgIds = ArrayDeque<String>()
     private var nextMessageId = 1
     private var nextGuestNumber = 1
     private var roomName: String = ""
@@ -82,7 +84,16 @@ class SessionStore {
         roomStateUnsafe()
     }
 
-    suspend fun addMessage(sessionId: String, text: String, fileInfo: FileInfo? = null): ChatMessage? = mutex.withLock {
+    suspend fun hasRecentClientMsgId(id: String): Boolean = mutex.withLock {
+        id in recentClientMsgIds
+    }
+
+    suspend fun rememberClientMsgId(id: String) = mutex.withLock {
+        if (recentClientMsgIds.size >= MAX_CLIENT_MSG_IDS) recentClientMsgIds.removeFirst()
+        recentClientMsgIds.addLast(id)
+    }
+
+    suspend fun addMessage(sessionId: String, text: String, fileInfo: FileInfo? = null, clientMsgId: String? = null): ChatMessage? = mutex.withLock {
         Log.d("StudCampSession", "addMessage: sessionId=$sessionId textLen=${text.length} hasFileInfo=${fileInfo != null} fileId=${fileInfo?.id}")
         val userId = sessionsById[sessionId]?.userId ?: return@withLock null
         val user = usersById[userId] ?: return@withLock null
@@ -92,7 +103,8 @@ class SessionStore {
             user = user,
             text = text,
             time = LocalDateTime.now(),
-            fileInfo = fileInfo
+            fileInfo = fileInfo,
+            clientMsgId = clientMsgId
         )
         messages.addLast(message)
         if (messages.size > MAX_MESSAGES) {
@@ -164,6 +176,7 @@ class SessionStore {
         usersById.clear()
         sessionsById.clear()
         messages.clear()
+        recentClientMsgIds.clear()
         nextMessageId = 1
         nextGuestNumber = 1
         roomName = ""
