@@ -2,6 +2,7 @@ package com.example.studcampapp.feature.profile.ui
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -30,6 +31,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import com.example.studcampapp.core.ui.R
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -115,23 +118,12 @@ fun ProfileScreen(
                         modifier = Modifier.fillMaxSize()
                     )
                 } else {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(
-                                Brush.radialGradient(colors = listOf(PurpleLight, PurpleVibrant))
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = user.firstName?.firstOrNull()?.toString()
-                                ?: user.login.firstOrNull()?.uppercase() ?: "?",
-                            fontSize = 38.sp,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = InterFontFamily,
-                            color = appColors.textPrimary
-                        )
-                    }
+                    Image(
+                        painter = painterResource(id = R.drawable.cute),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
                 }
 
                 if (!isGuest && localAvatarUri == null) {
