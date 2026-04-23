@@ -328,7 +328,14 @@ private fun Route.wsRoute(
                     }
 
                     is WsClientEvent.SendMessage -> {
-                        Log.d("StudCampWS", "server: SendMessage handler START sessionId=$sessionId hasFile=${clientEvent.fileInfo != null}")
+                        val clientMsgId = clientEvent.clientMsgId
+                        Log.d("StudCampWS", "server: SendMessage handler START sessionId=$sessionId hasFile=${clientEvent.fileInfo != null} clientMsgId=$clientMsgId")
+
+                        if (clientMsgId != null && sessionStore.hasRecentClientMsgId(clientMsgId)) {
+                            Log.w("StudCampWS", "server: duplicate SendMessage clientMsgId=$clientMsgId, ignoring")
+                            continue
+                        }
+
                         if (clientEvent.text.isBlank() && clientEvent.fileInfo == null) {
                             Log.e("StudCampWS", "server: sending Error EMPTY_MESSAGE to session=$sessionId (no text AND no file)")
                             connectionRegistry.sendTo(
@@ -343,7 +350,8 @@ private fun Route.wsRoute(
                         val message = sessionStore.addMessage(
                             sessionId = sessionId,
                             text = clientEvent.text,
-                            fileInfo = clientEvent.fileInfo
+                            fileInfo = clientEvent.fileInfo,
+                            clientMsgId = clientMsgId
                         )
 
                         if (message == null) {
@@ -356,6 +364,7 @@ private fun Route.wsRoute(
                             continue
                         }
 
+                        if (clientMsgId != null) sessionStore.rememberClientMsgId(clientMsgId)
                         Log.d("StudCampWS", "server: addMessage OK messageId=${message.id} hasFileInfo=${message.fileInfo != null}")
                         Log.d("StudCampWS", "server: broadcasting NewMessage")
                         connectionRegistry.broadcast(WsServerEvent.NewMessage(message), wsJson)
