@@ -2,6 +2,7 @@ package com.example.studcampapp.feature.chat.ui
 
 import android.os.Build
 import androidx.annotation.RequiresApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -15,6 +16,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import com.example.studcampapp.core.ui.R
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -88,23 +91,12 @@ fun ChatListScreen(
                             modifier = Modifier.fillMaxSize()
                         )
                     } else {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(
-                                    Brush.radialGradient(colors = listOf(PurpleLight, PurpleVibrant))
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = user?.firstName?.firstOrNull()?.toString()
-                                    ?: user?.login?.firstOrNull()?.toString() ?: "?",
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold,
-                                fontFamily = InterFontFamily,
-                                color = appColors.textPrimary
-                            )
-                        }
+                        Image(
+                            painter = painterResource(id = R.drawable.cute),
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
                     }
                 }
             }
