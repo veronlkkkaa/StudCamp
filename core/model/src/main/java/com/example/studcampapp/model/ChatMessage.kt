@@ -26,6 +26,7 @@ data class ChatMessage(
     val status: MessageStatus = MessageStatus.Sent,
     val readBy: List<String> = emptyList(),
     val fileInfo: FileInfo? = null,
+    val clientMsgId: String? = null,
     @kotlinx.serialization.Transient val attachment: MessageAttachment? = null,
     @kotlinx.serialization.Transient val isSystem: Boolean = false,
     @kotlinx.serialization.Transient val isPending: Boolean = false

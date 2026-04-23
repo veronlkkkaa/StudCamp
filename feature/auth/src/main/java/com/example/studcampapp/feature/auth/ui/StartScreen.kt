@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -33,6 +34,9 @@ fun StartScreen(
     val appColors = DarkAppColors
 
     var showNicknameDialog by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    val comingSoonMessage = "Эта функциональность будет доступна позже"
 
     val stars = listOf(
         Offset(0.05f, 0.03f), Offset(0.15f, 0.08f), Offset(0.28f, 0.05f),
@@ -88,6 +92,13 @@ fun StartScreen(
                 }
         }
 
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 32.dp)
+        )
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -128,7 +139,7 @@ fun StartScreen(
             )
 
             Button(
-                onClick = onAuthLogin,
+                onClick = { scope.launch { snackbarHostState.showSnackbar(comingSoonMessage) } },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
@@ -183,7 +194,7 @@ fun StartScreen(
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            TextButton(onClick = onRegister) {
+            TextButton(onClick = { scope.launch { snackbarHostState.showSnackbar(comingSoonMessage) } }) {
                 Text(
                     text = buildAnnotatedString {
                         append("Нет аккаунта? ")

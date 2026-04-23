@@ -11,7 +11,8 @@ sealed class WsClientEvent {
     @SerialName("send_message")
     data class SendMessage(
         val text: String,
-        val fileInfo: FileInfo? = null
+        val fileInfo: FileInfo? = null,
+        val clientMsgId: String? = null
     ) : WsClientEvent()
 
     @Serializable
