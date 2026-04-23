@@ -41,6 +41,7 @@ import io.ktor.websocket.close
 import io.ktor.websocket.readText
 import java.io.File
 import java.util.UUID
+import android.util.Log
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -198,6 +199,7 @@ fun Application.hostModule(
                 return@post
             }
 
+            Log.d("StudCampFile", "server: upload start, session=$sessionId")
             var uploadedFileInfo: com.example.studcampapp.model.FileInfo? = null
             var tooLarge = false
 
@@ -214,6 +216,7 @@ fun Application.hostModule(
                             mimeType = mimeType,
                             bytes = bytes
                         )
+                        Log.d("StudCampFile", "server: upload saved, id=${uploadedFileInfo?.id}, name=$originalName, bytes=${bytes.size}")
                     }
                 }
                 part.dispose()
@@ -230,7 +233,6 @@ fun Application.hostModule(
                 return@post
             }
 
-            connectionRegistry.broadcast(WsServerEvent.FileShared(fileInfo), wsJson)
             call.respond(HttpStatusCode.OK, UploadResponse(fileInfo))
         }
 
@@ -283,6 +285,7 @@ private fun Route.wsRoute(
 
         val user = sessionStore.getUserBySessionId(sessionId)
         if (user == null) {
+            Log.w("StudCampWS", "server: closing WS with VIOLATED_POLICY, sessionId=$sessionId reason=sessionNotFound")
             close(CloseReason(CloseReason.Codes.VIOLATED_POLICY, "invalid sessionId"))
             return@webSocket
         }
@@ -315,6 +318,9 @@ private fun Route.wsRoute(
                     continue
                 }
                 val clientEvent = parseResult.getOrThrow()
+                val fileExtra = if (clientEvent is WsClientEvent.SendMessage && clientEvent.fileInfo != null)
+                    " hasFile=true fileId=${(clientEvent as WsClientEvent.SendMessage).fileInfo!!.id}" else ""
+                Log.d("StudCampWS", "server: received ${clientEvent::class.simpleName} from session=$sessionId user=${user.login}$fileExtra")
 
                 when (clientEvent) {
                     WsClientEvent.Ping -> {
@@ -322,15 +328,18 @@ private fun Route.wsRoute(
                     }
 
                     is WsClientEvent.SendMessage -> {
-                        if (clientEvent.text.isBlank()) {
+                        Log.d("StudCampWS", "server: SendMessage handler START sessionId=$sessionId hasFile=${clientEvent.fileInfo != null}")
+                        if (clientEvent.text.isBlank() && clientEvent.fileInfo == null) {
+                            Log.e("StudCampWS", "server: sending Error EMPTY_MESSAGE to session=$sessionId (no text AND no file)")
                             connectionRegistry.sendTo(
                                 sessionId,
-                                WsServerEvent.Error("EMPTY_MESSAGE", "message text must not be blank"),
+                                WsServerEvent.Error("EMPTY_MESSAGE", "message must have text or attachment"),
                                 wsJson
                             )
                             continue
                         }
 
+                        Log.d("StudCampWS", "server: calling sessionStore.addMessage")
                         val message = sessionStore.addMessage(
                             sessionId = sessionId,
                             text = clientEvent.text,
@@ -338,6 +347,7 @@ private fun Route.wsRoute(
                         )
 
                         if (message == null) {
+                            Log.e("StudCampWS", "server: sending Error INVALID_SESSION to session=$sessionId (addMessage returned null)")
                             connectionRegistry.sendTo(
                                 sessionId,
                                 WsServerEvent.Error("INVALID_SESSION", "session is not active"),
@@ -346,7 +356,10 @@ private fun Route.wsRoute(
                             continue
                         }
 
+                        Log.d("StudCampWS", "server: addMessage OK messageId=${message.id} hasFileInfo=${message.fileInfo != null}")
+                        Log.d("StudCampWS", "server: broadcasting NewMessage")
                         connectionRegistry.broadcast(WsServerEvent.NewMessage(message), wsJson)
+                        Log.d("StudCampWS", "server: SendMessage handler END OK")
                     }
 
                     is WsClientEvent.SendFile -> {
@@ -380,6 +393,7 @@ private fun Route.wsRoute(
                 }
             }
         } finally {
+            Log.d("StudCampWS", "server: WS finally, session=$sessionId, markDisconnected")
             connectionRegistry.unregister(sessionId)
             sessionStore.markDisconnected(sessionId)
         }
@@ -402,6 +416,7 @@ private suspend fun handleJoinOrAuth(call: ApplicationCall, sessionStore: Sessio
             throw error
         }
 
+    Log.d("StudCampWS", "server: /join login=${response.user.login} → sessionId=${response.sessionId}")
     call.respond(HttpStatusCode.OK, response)
 }
 

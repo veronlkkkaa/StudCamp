@@ -25,6 +25,7 @@ object ChatRepositoryImpl : ChatRepository {
     override val isConnected: Boolean get() = ChatClient.isConnected
     override val sessionInvalidated: Boolean get() = ChatClient.sessionInvalidated
     override val connectionError: String? get() = ChatClient.connectionError
+    override val lastServerError: String? get() = ChatClient.lastServerError
     override val uploadProgress: Float? get() = ChatClient.uploadProgress
     override val baseUrl: String get() = ChatClient.baseUrl
     override val currentRoomName: String get() = ChatClient.currentRoomName
