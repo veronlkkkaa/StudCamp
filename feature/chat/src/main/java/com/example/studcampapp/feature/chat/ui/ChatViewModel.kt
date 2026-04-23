@@ -30,6 +30,7 @@ class ChatViewModel(
     val participants get() = chatRepository.participants
     val myUser get() = chatRepository.myUser
     val isHostClosed get() = chatRepository.isHostClosed
+    val sessionInvalidated get() = chatRepository.sessionInvalidated
     val connectionError get() = chatRepository.connectionError
     val uploadProgress get() = chatRepository.uploadProgress
     val roomName get() = chatRepository.currentRoomName

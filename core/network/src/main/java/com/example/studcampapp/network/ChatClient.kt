@@ -37,6 +37,7 @@ import io.ktor.client.request.setBody
 import io.ktor.http.Headers
 import io.ktor.http.HttpHeaders
 import io.ktor.serialization.kotlinx.json.json
+import io.ktor.websocket.CloseReason
 import io.ktor.websocket.Frame
 import io.ktor.websocket.readText
 import kotlinx.coroutines.CoroutineScope
@@ -53,6 +54,8 @@ import kotlinx.serialization.json.Json
 
 object ChatClient {
     private const val RECONNECT_DELAY_MS = 1_000L
+    private const val NSD_REDISCOVERY_FAILURES_THRESHOLD = 3
+    private const val NSD_REDISCOVERY_TIMEOUT_MS = 10_000L
 
     val messages = mutableStateListOf<ChatMessage>()
     val participants = mutableStateListOf<User>()
@@ -66,6 +69,8 @@ object ChatClient {
         private set
     var isConnected by mutableStateOf(false)
         private set
+    var sessionInvalidated by mutableStateOf(false)
+        private set
     var currentRoomName by mutableStateOf("")
         private set
     var currentRoomId: String = ""
@@ -77,12 +82,17 @@ object ChatClient {
     private var serverIp: String = ""
     private var serverPort: Int = HostConnectionConfig.DEFAULT_PORT
     private var connectJob: Job? = null
+    private var appContext: Context? = null
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val pendingEvents = Channel<WsClientEvent>(Channel.UNLIMITED)
     private var tempIdCounter = 0
 
     val baseUrl: String get() = "http://$serverIp:$serverPort"
     fun getAuthHeader(): String? = sessionId?.let { "Session $it" }
+
+    fun initContext(context: Context) {
+        appContext = context.applicationContext
+    }
 
     private val wsJson = Json {
         ignoreUnknownKeys = true
@@ -93,7 +103,9 @@ object ChatClient {
 
     private val httpClient = HttpClient(CIO) {
         install(ContentNegotiation) { json(wsJson) }
-        install(WebSockets)
+        install(WebSockets) {
+            pingInterval = 15_000L
+        }
     }
 
     suspend fun join(ip: String, port: Int, login: String): Result<Unit> = runCatching {
@@ -135,10 +147,13 @@ object ChatClient {
         val sid = sessionId ?: return
         connectJob?.cancel()
         connectJob = scope.launch {
+            var consecutiveFailures = 0
             while (sessionId == sid && !isHostClosed) {
+                var sessionExpired = false
                 val wsResult = runCatching {
                     httpClient.webSocket("ws://$serverIp:$serverPort/ws?sessionId=$sid") {
                         withContext(Dispatchers.Main) { connectionError = null; isConnected = true }
+                        consecutiveFailures = 0
                         launch {
                             pendingEvents.consumeEach { event ->
                                 send(Frame.Text(wsJson.encodeToString(WsClientEvent.serializer(), event)))
@@ -151,16 +166,40 @@ object ChatClient {
                             }.getOrNull() ?: return@consumeEach
                             withContext(Dispatchers.Main) { handleEvent(event) }
                         }
+                        val reason = closeReason.await()
+                        if (reason?.code == CloseReason.Codes.VIOLATED_POLICY.code) {
+                            sessionExpired = true
+                        }
                     }
                 }
 
                 withContext(Dispatchers.Main) { isConnected = false }
 
+                if (sessionExpired) {
+                    withContext(Dispatchers.Main) { sessionInvalidated = true }
+                    break
+                }
+
                 if (sessionId != sid || isHostClosed) break
 
                 val wsError = wsResult.exceptionOrNull()
-                if (wsError is CancellationException) {
-                    break
+                if (wsError is CancellationException) break
+
+                if (wsResult.isFailure) {
+                    consecutiveFailures++
+                    if (consecutiveFailures >= NSD_REDISCOVERY_FAILURES_THRESHOLD) {
+                        val ctx = appContext
+                        val roomId = currentRoomId
+                        if (ctx != null && roomId.isNotBlank()) {
+                            val found = tryRediscoverHost(ctx, roomId)
+                            if (found != null) {
+                                serverIp = found.first
+                                serverPort = found.second
+                                consecutiveFailures = 0
+                                continue
+                            }
+                        }
+                    }
                 }
 
                 withContext(Dispatchers.Main) {
@@ -278,6 +317,22 @@ object ChatClient {
         if (idx >= 0) participants[idx] = updated
     }
 
+    private suspend fun tryRediscoverHost(context: Context, roomId: String): Pair<String, Int>? {
+        val targetServiceName = "${NsdDiscovery.SERVICE_NAME_PREFIX}$roomId"
+        NsdDiscovery.start(context)
+        val deadline = System.currentTimeMillis() + NSD_REDISCOVERY_TIMEOUT_MS
+        var found: com.example.studcampapp.model.DiscoveredRoom? = null
+        while (System.currentTimeMillis() < deadline) {
+            found = withContext(Dispatchers.Main) {
+                NsdDiscovery.rooms.firstOrNull { it.serviceName == targetServiceName }
+            }
+            if (found != null) break
+            delay(500L)
+        }
+        NsdDiscovery.stop()
+        return found?.let { it.ip to it.port }
+    }
+
     fun disconnect() {
         connectJob?.cancel()
         connectJob = null
@@ -292,6 +347,7 @@ object ChatClient {
             connectionError = null
             isHostClosed = false
             isConnected = false
+            sessionInvalidated = false
         }
     }
 
