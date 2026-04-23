@@ -1,5 +1,6 @@
 package com.example.studcampapp.backend.server
 
+import android.util.Log
 import com.example.studcampapp.network.ws.WsServerEvent
 import io.ktor.server.websocket.WebSocketServerSession
 import io.ktor.websocket.CloseReason
@@ -22,12 +23,14 @@ class WsConnectionRegistry {
     private val sessions = LinkedHashMap<String, Connection>()
 
     suspend fun register(sessionId: String, userId: String, session: WebSocketServerSession) {
+        Log.d("StudCampBroadcast", "register session=$sessionId")
         mutex.withLock {
             sessions[sessionId] = Connection(userId = userId, session = session)
         }
     }
 
     suspend fun unregister(sessionId: String) {
+        Log.d("StudCampBroadcast", "unregister session=$sessionId")
         mutex.withLock {
             sessions.remove(sessionId)
         }
@@ -47,6 +50,7 @@ class WsConnectionRegistry {
     suspend fun broadcast(event: WsServerEvent, json: Json) {
         val payload = json.encodeToString(WsServerEvent.serializer(), event)
         val snapshot = mutex.withLock { sessions.toMap() }
+        Log.d("StudCampBroadcast", "broadcast ${event::class.simpleName} to ${snapshot.size} sessions: ${snapshot.keys}")
         coroutineScope {
             snapshot.forEach { (sessionId, connection) ->
                 launch {
@@ -56,6 +60,7 @@ class WsConnectionRegistry {
                         }
                     }.isSuccess
                     if (!sent) {
+                        Log.w("StudCampBroadcast", "failed to send to $sessionId, unregistering")
                         unregister(sessionId)
                     }
                 }
