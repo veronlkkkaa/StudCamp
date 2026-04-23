@@ -95,7 +95,7 @@ fun JoinRoomScreen(
     }
 
     fun isOwnRoom(room: DiscoveredRoom): Boolean {
-        return isOwnEndpoint(room.ip, room.port) || (isHostRunning && room.name == hostedRoomName)
+        return isOwnEndpoint(room.ip, room.port) || (isHostRunning && room.displayName == hostedRoomName)
     }
 
     fun validatePort(raw: String): Int? {
@@ -238,7 +238,7 @@ fun JoinRoomScreen(
                                 localError = "Нельзя подключиться к своей комнате"
                                 return@Button
                             }
-                            viewModel.join(room.ip, room.port, nickname, room.name)
+                            viewModel.join(room.ip, room.port, nickname, room.displayName)
                         }
 
                         JoinMode.MANUAL -> {
@@ -341,7 +341,7 @@ private fun DiscoveryRoomsSection(
             .height(220.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        items(rooms, key = { "${it.name}-${it.ip}-${it.port}" }) { room ->
+        items(rooms, key = { "${it.serviceName}-${it.ip}-${it.port}" }) { room ->
             val ownRoom = isOwnRoom(room)
             val selected = selectedRoom == room
             val alpha = if (ownRoom) 0.55f else 1f
@@ -359,7 +359,7 @@ private fun DiscoveryRoomsSection(
                         .background(Color.Transparent)
                 ) {
                     Text(
-                        text = room.name,
+                        text = room.displayName,
                         fontSize = 15.sp,
                         fontWeight = FontWeight.SemiBold,
                         fontFamily = InterFontFamily,

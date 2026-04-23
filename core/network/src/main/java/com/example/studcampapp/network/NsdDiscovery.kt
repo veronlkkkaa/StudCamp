@@ -15,6 +15,8 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 
 object NsdDiscovery {
+    const val SERVICE_NAME_PREFIX = "lyra-"
+
     val rooms = mutableStateListOf<DiscoveredRoom>()
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -43,12 +45,14 @@ object NsdDiscovery {
             override fun onDiscoveryStopped(serviceType: String) {}
 
             override fun onServiceFound(serviceInfo: NsdServiceInfo) {
-                queue.trySend(serviceInfo)
+                if (serviceInfo.serviceName.startsWith(SERVICE_NAME_PREFIX)) {
+                    queue.trySend(serviceInfo)
+                }
             }
 
             override fun onServiceLost(serviceInfo: NsdServiceInfo) {
                 scope.launch(Dispatchers.Main) {
-                    rooms.removeAll { it.name == serviceInfo.serviceName }
+                    rooms.removeAll { it.serviceName == serviceInfo.serviceName }
                 }
             }
         }
@@ -79,15 +83,22 @@ object NsdDiscovery {
                 }
 
                 override fun onServiceResolved(resolved: NsdServiceInfo) {
+                    val rawServiceName = resolved.serviceName
                     val ip = resolved.host?.hostAddress
-                    if (ip != null) {
+                    if (ip != null && rawServiceName.startsWith(SERVICE_NAME_PREFIX)) {
+                        val roomId = rawServiceName.removePrefix(SERVICE_NAME_PREFIX)
+                        val displayName = runCatching {
+                            resolved.attributes?.get("name")?.let { String(it, Charsets.UTF_8) }
+                        }.getOrNull() ?: rawServiceName
                         val room = DiscoveredRoom(
-                            name = resolved.serviceName,
+                            serviceName = rawServiceName,
+                            displayName = displayName,
+                            roomId = roomId,
                             ip = ip,
                             port = resolved.port
                         )
                         scope.launch(Dispatchers.Main) {
-                            if (rooms.none { it.name == room.name }) rooms.add(room)
+                            if (rooms.none { it.roomId == room.roomId }) rooms.add(room)
                         }
                     }
                     if (cont.isActive) cont.resume(Unit)
