@@ -169,7 +169,7 @@ fun ChatListScreen(
                     )
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        text = "Создай комнату или подключись к существующей",
+                        text = "Создай новую или подключись к существующей",
                         fontSize = 13.sp,
                         fontFamily = InterFontFamily,
                         color = appColors.textSecondary.copy(alpha = 0.6f),

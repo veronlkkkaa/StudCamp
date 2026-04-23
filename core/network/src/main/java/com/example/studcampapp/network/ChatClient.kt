@@ -47,16 +47,23 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.channels.consumeEach
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import java.util.UUID
 
 object ChatClient {
     private const val RECONNECT_DELAY_MS = 1_000L
     private const val NSD_REDISCOVERY_FAILURES_THRESHOLD = 3
     private const val NSD_REDISCOVERY_TIMEOUT_MS = 10_000L
+
+    private data class OutboxEntry(
+        val clientMsgId: String,
+        val event: WsClientEvent,
+        val enqueuedAt: Long,
+        val attemptCount: Int = 0
+    )
 
     val messages = mutableStateListOf<ChatMessage>()
     val participants = mutableStateListOf<User>()
@@ -87,7 +94,7 @@ object ChatClient {
     private var connectJob: Job? = null
     private var appContext: Context? = null
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    private val pendingEvents = Channel<WsClientEvent>(Channel.UNLIMITED)
+    private val outbox = mutableStateListOf<OutboxEntry>()
     private var tempIdCounter = 0
 
     val baseUrl: String get() = "http://$serverIp:$serverPort"
@@ -164,31 +171,42 @@ object ChatClient {
                         consecutiveFailures = 0
                         launch {
                             try {
-                                pendingEvents.consumeEach { event ->
+                                while (isActive) {
+                                    val entry = outbox.firstOrNull()
+                                    if (entry == null) {
+                                        delay(100)
+                                        continue
+                                    }
                                     val payload = runCatching {
-                                        wsJson.encodeToString(WsClientEvent.serializer(), event)
+                                        wsJson.encodeToString(WsClientEvent.serializer(), entry.event)
                                     }
-                                    payload.onFailure { e ->
-                                        Log.e("StudCampWS", "client: encode failed for ${event::class.simpleName}", e)
-                                        return@consumeEach
+                                    if (payload.isFailure) {
+                                        Log.e("StudCampWS", "client: outbox encode failed, dropping ${entry.clientMsgId}", payload.exceptionOrNull())
+                                        outbox.remove(entry)
+                                        continue
                                     }
-                                    val payloadStr = payload.getOrThrow()
-                                    Log.d("StudCampWS", "client: sending ${event::class.simpleName}, size=${payloadStr.length}")
-                                    runCatching { send(Frame.Text(payloadStr)) }.onFailure { e ->
-                                        Log.e("StudCampWS", "client: send failed for ${event::class.simpleName}", e)
+                                    val sendResult = runCatching { send(Frame.Text(payload.getOrThrow())) }
+                                    if (sendResult.isSuccess) {
+                                        Log.d("StudCampWS", "client: outbox sent ${entry.event::class.simpleName} clientMsgId=${entry.clientMsgId}")
+                                        val idx = outbox.indexOf(entry)
+                                        if (idx >= 0) outbox[idx] = entry.copy(attemptCount = entry.attemptCount + 1)
+                                        delay(500)
+                                    } else {
+                                        Log.w("StudCampWS", "client: outbox send failed, will retry after reconnect", sendResult.exceptionOrNull())
+                                        break
                                     }
                                 }
                             } catch (e: CancellationException) {
                                 throw e
                             } catch (e: Exception) {
-                                Log.e("StudCampWS", "client: pendingEvents loop died", e)
+                                Log.e("StudCampWS", "client: outbox worker died", e)
                             }
                         }
-                        incoming.consumeEach { frame ->
-                            if (frame !is Frame.Text) return@consumeEach
+                        for (frame in incoming) {
+                            if (frame !is Frame.Text) continue
                             val event = runCatching {
                                 wsJson.decodeFromString(WsServerEvent.serializer(), frame.readText())
-                            }.getOrNull() ?: return@consumeEach
+                            }.getOrNull() ?: continue
                             withContext(Dispatchers.Main) { handleEvent(event) }
                         }
                         val reason = closeReason.await()
@@ -242,6 +260,7 @@ object ChatClient {
     fun sendMessage(text: String, fileInfo: FileInfo? = null) {
         lastServerError = null
         val user = myUser ?: return
+        val clientMsgId = UUID.randomUUID().toString()
         val tempId = --tempIdCounter
         val tempMsg = ChatMessage(
             id = tempId,
@@ -250,10 +269,14 @@ object ChatClient {
             time = java.time.LocalDateTime.now(),
             status = MessageStatus.Sending,
             fileInfo = fileInfo,
+            clientMsgId = clientMsgId,
             isPending = true
         )
         messages.add(tempMsg)
-        pendingEvents.trySend(WsClientEvent.SendMessage(text = text, fileInfo = fileInfo))
+        val event = WsClientEvent.SendMessage(text = text, fileInfo = fileInfo, clientMsgId = clientMsgId)
+        outbox.add(OutboxEntry(clientMsgId = clientMsgId, event = event, enqueuedAt = System.currentTimeMillis()))
+        Log.d("StudCampWS", "client: outbox enqueue clientMsgId=$clientMsgId event=${event::class.simpleName}")
+        Log.d("StudCampWS", "client: outbox size=${outbox.size}")
     }
 
     suspend fun uploadFile(
@@ -373,6 +396,7 @@ object ChatClient {
         myUser = null
         currentRoomId = ""
         tempIdCounter = 0
+        outbox.clear()
         scope.launch(Dispatchers.Main) {
             currentRoomName = ""
             messages.clear()
@@ -409,14 +433,25 @@ object ChatClient {
                 participants.addAll(event.state.users)
             }
             is WsServerEvent.NewMessage -> {
-                val pendingIdx = messages.indexOfFirst { msg ->
-                    msg.isPending &&
-                    msg.user.id == event.message.user.id &&
-                    msg.text == event.message.text
+                val incomingMsg = event.message
+                val clientMsgId = incomingMsg.clientMsgId
+
+                if (clientMsgId != null) {
+                    val outboxIdx = outbox.indexOfFirst { it.clientMsgId == clientMsgId }
+                    if (outboxIdx >= 0) {
+                        Log.d("StudCampWS", "client: outbox ack received clientMsgId=$clientMsgId")
+                        outbox.removeAt(outboxIdx)
+                        Log.d("StudCampWS", "client: outbox size=${outbox.size}")
+                    }
+                    val pendingIdx = messages.indexOfFirst { it.isPending && it.clientMsgId == clientMsgId }
+                    if (pendingIdx >= 0) {
+                        messages[pendingIdx] = incomingMsg
+                        return
+                    }
                 }
-                if (pendingIdx >= 0) messages.removeAt(pendingIdx)
-                if (messages.none { it.id == event.message.id }) {
-                    messages.add(event.message)
+
+                if (messages.none { it.id == incomingMsg.id }) {
+                    messages.add(incomingMsg)
                 }
             }
             is WsServerEvent.UserJoined -> {
